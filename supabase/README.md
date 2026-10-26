@@ -12,6 +12,8 @@ In the Supabase Dashboard, open **SQL Editor**, create a query, paste the conten
 
 For quote requests, request tracking, reviews, and private profile reports, run `migrations/202610270002_marketplace_features.sql` once after the initial schema. It adds worker profile details and availability, participant-only quote requests, reviews that can only be submitted for completed requests, and private profile reports.
 
+For worker profile photos, run `migrations/202610270003_worker_profile_photos.sql` after the marketplace migration. Photos are resized in the browser to 512 × 512 JPEGs and saved in a private bucket. Each worker can manage only objects in their own user-id folder. The directory issues short-lived signed links only for profiles that are both listed and consented; unlisting a profile stops new public links from being created.
+
 ## 3. Configure email sign-in
 
 In **Authentication → URL Configuration**, add the deployed site URL as the Site URL and add this redirect URL to the allowed list:
@@ -32,4 +34,4 @@ Worker requests are stored in `public.verification_requests`. Review references 
 
 ## Current setup status
 
-The Jirani Supabase project has been created on the Free plan, both database migrations have been applied, and `supabase-config.js` contains its public project URL and publishable key. The included sample workers are fictional and should be removed before collecting real listings. Reports and identity checks currently require manual review in Supabase Studio; no reviewer tools are exposed in the public app.
+The Jirani Supabase project has been created on the Free plan, the initial schema and marketplace migration have been applied, and `supabase-config.js` contains its public project URL and publishable key. The worker-photo migration must also be applied before photo upload is enabled in the live app. The included sample workers are fictional and should be removed before collecting real listings. Reports and identity checks currently require manual review in Supabase Studio; no reviewer tools are exposed in the public app.

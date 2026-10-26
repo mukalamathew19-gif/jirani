@@ -11,6 +11,17 @@ const DEMO_WORKERS = [
   { id: "demo-8", name: "Joseph Maina", service: "Mechanic", area: "Industrial Area", years: 12, initials: "JM", tags: ["Diagnostics", "Servicing"], phone: "", demo: true },
   { id: "demo-9", name: "Lydia Achieng", service: "Caterer", area: "Westlands", years: 6, initials: "LA", tags: ["Events", "Home meals"], phone: "", demo: true }
 ];
+const FEATURED_SERVICES = [
+  { name: "Plumber", label: "Plumbing", icon: "⌁" },
+  { name: "Electrician", label: "Electrical", icon: "ϟ" },
+  { name: "House cleaner", label: "Cleaning", icon: "✳" },
+  { name: "Tailor", label: "Tailoring", icon: "✂" },
+  { name: "Carpenter", label: "Carpentry", icon: "⌂" },
+  { name: "Painter", label: "Painting", icon: "◒" },
+  { name: "Mechanic", label: "Mechanic", icon: "⚙" },
+  { name: "Hair stylist", label: "Hair & beauty", icon: "✿" }
+];
+const PHOTO_BUCKET = "jirani-worker-photos";
 const KEYS = { accounts: "jirani-preview-accounts", session: "jirani-preview-session", favorites: "jirani-favorites", settings: "jirani-settings", requests: "jirani-preview-requests", reviews: "jirani-preview-reviews" };
 const supabaseConfig = window.JIRANI_SUPABASE_CONFIG || {};
 const backendConfigured = Boolean(supabaseConfig.url && supabaseConfig.publishableKey);
@@ -37,6 +48,9 @@ let backendReviews = [];
 let installPrompt = null;
 let lastModalTrigger = null;
 let deepLinkHandled = false;
+let pendingProfilePhoto = null;
+let removeProfilePhoto = false;
+let profilePreviewUrl = null;
 
 function read(key, fallback) {
   try { return JSON.parse(localStorage.getItem(key)) ?? fallback; } catch { return fallback; }
@@ -48,17 +62,19 @@ function currentUser() {
     if (!authUser) return null;
     const metadata = authUser.user_metadata || {};
     const profile = backendProfile ? {
+      displayName: backendProfile.display_name,
       service: backendProfile.service,
       area: backendProfile.locality,
       phone: backendProfile.contact_phone,
       years: backendProfile.years_experience,
       skills: backendProfile.skills.join(", "),
       bio: backendProfile.bio || "", priceHint: backendProfile.price_hint || "",
-      availability: backendProfile.availability || "available", isListed: backendProfile.is_listed
+      availability: backendProfile.availability || "available", isListed: backendProfile.is_listed,
+      photoPath: backendProfile.profile_photo_path || "", photoUrl: backendProfile.profile_photo_url || ""
     } : null;
     return {
       id: authUser.id,
-      name: metadata.display_name || authUser.email?.split("@")[0] || "Neighbor",
+      name: backendProfile?.display_name || metadata.display_name || authUser.email?.split("@")[0] || "Neighbor",
       email: authUser.email || "",
       role: metadata.account_type === "worker" ? "worker" : "customer",
       profile,
@@ -67,7 +83,8 @@ function currentUser() {
     };
   }
   const sessionEmail = read(KEYS.session, "");
-  return accounts().find((account) => account.email === sessionEmail) || null;
+  const account = accounts().find((item) => item.email === sessionEmail);
+  return account ? { ...account, name: account.profile?.displayName || account.name } : null;
 }
 function saveAccounts(value) { localStorage.setItem(KEYS.accounts, JSON.stringify(value)); }
 function saveAccount(updated) {
@@ -83,10 +100,11 @@ function allWorkers() {
     const reviews = previews.filter((review) => String(review.workerId) === String(account.email));
     const total = reviews.reduce((sum, review) => sum + Number(review.rating || 0), 0);
     return {
-      id: account.email, name: account.name, service: account.profile.service, area: account.profile.area,
+      id: account.email, name: account.profile.displayName || account.name, service: account.profile.service, area: account.profile.area,
       years: Number(account.profile.years) || 0, initials: account.name.split(/\s+/).map((part) => part[0]).slice(0, 2).join("").toUpperCase(),
       tags: (account.profile.skills || "").split(",").map((item) => item.trim()).filter(Boolean).slice(0, 3), phone: account.profile.phone, verification: account.verification || "unverified", demo: false,
-      bio: account.profile.bio || "", priceHint: account.profile.priceHint || "", availability: account.profile.availability || "available", rating: reviews.length ? total / reviews.length : 0, reviewCount: reviews.length
+      bio: account.profile.bio || "", priceHint: account.profile.priceHint || "", availability: account.profile.availability || "available", rating: reviews.length ? total / reviews.length : 0, reviewCount: reviews.length,
+      photoUrl: account.profile.photoDataUrl || ""
     };
   });
   return [...members, ...DEMO_WORKERS];
@@ -214,7 +232,7 @@ function escapeHtml(value) {
   return String(value).replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]);
 }
 function mapBackendWorker(row) {
-  const initials = row.display_name.split(/\s+/).map((part) => part[0]).slice(0, 2).join("").toUpperCase();
+  const initials = (row.display_name || "Jirani").split(/\s+/).map((part) => part[0]).slice(0, 2).join("").toUpperCase();
   return {
     id: row.user_id,
     name: row.display_name,
@@ -228,20 +246,29 @@ function mapBackendWorker(row) {
     availability: row.availability || "available",
     rating: row.rating || 0, reviewCount: row.reviewCount || 0,
     verification: row.verification_status,
+    photoPath: row.profile_photo_path || "", photoUrl: row.photoUrl || "",
     demo: false
   };
+}
+async function signedProfilePhotoUrls(paths) {
+  const uniquePaths = [...new Set(paths.filter(Boolean))];
+  if (!uniquePaths.length) return new Map();
+  const { data, error } = await supabaseClient.storage.from(PHOTO_BUCKET).createSignedUrls(uniquePaths, 3600);
+  if (error) throw error;
+  return new Map((data || []).filter((item) => item.signedUrl).map((item) => [item.path, item.signedUrl]));
 }
 async function loadBackendWorkers() {
   if (!supabaseClient) return;
   const { data, error } = await supabaseClient
     .from("worker_profiles")
-    .select("user_id,display_name,service,locality,contact_phone,years_experience,skills,verification_status,bio,price_hint,availability")
+    .select("user_id,display_name,service,locality,contact_phone,years_experience,skills,verification_status,bio,price_hint,availability,profile_photo_path")
     .eq("is_listed", true)
     .eq("contact_consent", true)
     .order("created_at", { ascending: false });
   if (error) throw error;
   const { data: reviews, error: reviewError } = await supabaseClient.from("worker_reviews").select("worker_id,rating");
   if (reviewError) throw reviewError;
+  const photoUrls = await signedProfilePhotoUrls((data || []).map((row) => row.profile_photo_path));
   backendReviews = reviews || [];
   const ratings = new Map();
   backendReviews.forEach(({ worker_id, rating }) => {
@@ -250,7 +277,7 @@ async function loadBackendWorkers() {
   });
   backendWorkers = (data || []).map((row) => {
     const rating = ratings.get(row.user_id) || { total: 0, count: 0 };
-    return mapBackendWorker({ ...row, rating: rating.count ? rating.total / rating.count : 0, reviewCount: rating.count });
+    return mapBackendWorker({ ...row, photoUrl: photoUrls.get(row.profile_photo_path), rating: rating.count ? rating.total / rating.count : 0, reviewCount: rating.count });
   });
 }
 async function loadOwnBackendProfile() {
@@ -261,11 +288,16 @@ async function loadOwnBackendProfile() {
   }
   const { data, error } = await supabaseClient
     .from("worker_profiles")
-    .select("user_id,display_name,service,locality,contact_phone,years_experience,skills,contact_consent,is_listed,verification_status,bio,price_hint,availability")
+    .select("user_id,display_name,service,locality,contact_phone,years_experience,skills,contact_consent,is_listed,verification_status,bio,price_hint,availability,profile_photo_path")
     .eq("user_id", authUser.id)
     .maybeSingle();
   if (error) throw error;
   backendProfile = data;
+  if (data?.profile_photo_path) {
+    const { data: photo, error: photoError } = await supabaseClient.storage.from(PHOTO_BUCKET).createSignedUrl(data.profile_photo_path, 3600);
+    if (photoError) throw photoError;
+    backendProfile.profile_photo_url = photo?.signedUrl || "";
+  }
 }
 async function refreshBackendState() {
   try {
@@ -302,9 +334,9 @@ function renderFilterOptions() {
   const workers = allWorkers();
   const currentService = serviceFilter.value;
   const currentArea = areaFilter.value;
-  const services = [...new Set(workers.map((worker) => worker.service))].sort();
+  const services = [...new Set([...FEATURED_SERVICES.map((item) => item.name), ...workers.map((worker) => worker.service)])].sort();
   const areas = [...new Set(workers.map((worker) => worker.area))].sort();
-  serviceFilter.replaceChildren(new Option("Any service", ""), ...services.map((item) => new Option(item, item)));
+  serviceFilter.replaceChildren(new Option("Any service", ""), ...services.map((item) => new Option(FEATURED_SERVICES.find((service) => service.name.toLowerCase() === item.toLowerCase())?.label || item, item)));
   areaFilter.replaceChildren(new Option("Everywhere", ""), ...areas.map((item) => new Option(item, item)));
   serviceFilter.value = services.includes(currentService) ? currentService : "";
   areaFilter.value = areas.includes(currentArea) ? currentArea : "";
@@ -314,7 +346,7 @@ function renderFilterOptions() {
     const chip = document.createElement("button");
     chip.className = "category-chip";
     chip.type = "button";
-    chip.textContent = service;
+    chip.textContent = FEATURED_SERVICES.find((item) => item.name === service)?.label || service;
     chip.dataset.service = service;
     chip.classList.toggle("active", service === active);
     chip.addEventListener("click", () => {
@@ -334,6 +366,14 @@ function makeCard(worker, index) {
   const avatar = document.createElement("div");
   avatar.className = `worker-avatar color-${index % 5}`;
   avatar.textContent = worker.initials;
+  if (worker.photoUrl) {
+    const image = document.createElement("img");
+    image.src = worker.photoUrl;
+    image.alt = `Profile photo of ${worker.name}`;
+    image.addEventListener("error", () => { image.remove(); avatar.textContent = worker.initials; });
+    avatar.classList.add("has-photo");
+    avatar.replaceChildren(image);
+  }
   top.append(avatar);
   const badge = document.createElement("span");
   badge.className = `availability ${worker.verification === "verified" ? "verified" : worker.demo ? "sample" : "unverified"}`;
@@ -358,7 +398,7 @@ function makeCard(worker, index) {
   const description = document.createElement("p"); description.className = "card-description"; description.textContent = worker.bio || "Local professional ready to discuss your project.";
   const quote = document.createElement("p"); quote.className = "card-price"; quote.textContent = worker.priceHint || "Ask for a quote";
   const expanded = document.createElement("div"); expanded.className = "card-expanded"; expanded.hidden = true;
-  expanded.append(description, quote);
+  expanded.append(description);
   const detailActions = document.createElement("div"); detailActions.className = "detail-actions";
   const report = document.createElement("button"); report.type = "button"; report.className = "text-action report-action"; report.dataset.reportWorker = worker.id; report.textContent = "Report profile";
   const share = document.createElement("button"); share.type = "button"; share.className = "text-action"; share.dataset.shareWorker = worker.id; share.textContent = "Share profile ↗";
@@ -378,7 +418,7 @@ function makeCard(worker, index) {
     const whatsapp = document.createElement("a"); whatsapp.className = "card-button primary"; whatsapp.href = `https://wa.me/${whatsappPhone}`; whatsapp.target = "_blank"; whatsapp.rel = "noopener noreferrer"; whatsapp.textContent = "WhatsApp ↗";
     detailActions.append(call, whatsapp);
   }
-  card.append(top, name, role, details, tags, trust, actions, expanded);
+  card.append(top, name, role, details, tags, trust, quote, actions, expanded);
   return card;
 }
 function render() {
@@ -389,13 +429,33 @@ function render() {
   const sort = $("#sort-workers")?.value || "recent";
   const favoritesOnly = Boolean($("#favorites-only")?.checked);
   const favorites = read(KEYS.favorites, []);
-  let matches = allWorkers().filter((worker) => (!favoritesOnly || favorites.includes(String(worker.id))) && (!service || worker.service.toLowerCase() === service.toLowerCase()) && (!area || worker.area.toLowerCase() === area.toLowerCase()) && (!query || [worker.name, worker.service, worker.area, worker.bio, ...(worker.tags || [])].join(" ").toLowerCase().includes(query)));
+  const directoryWorkers = allWorkers();
+  let matches = directoryWorkers.filter((worker) => (!favoritesOnly || favorites.includes(String(worker.id))) && (!service || worker.service.toLowerCase() === service.toLowerCase()) && (!area || worker.area.toLowerCase() === area.toLowerCase()) && (!query || [worker.name, worker.service, worker.area, worker.bio, ...(worker.tags || [])].join(" ").toLowerCase().includes(query)));
   if (sort === "experience") matches = matches.sort((a, b) => b.years - a.years);
   if (sort === "rating") matches = matches.sort((a, b) => b.rating - a.rating || b.reviewCount - a.reviewCount);
   listingGrid.replaceChildren(...matches.map((worker, index) => makeCard(worker, index)));
   resultCount.textContent = `${matches.length} ${matches.length === 1 ? "person" : "people"}`;
   emptyState.hidden = matches.length > 0;
   listingGrid.hidden = matches.length === 0;
+  const noListings = directoryWorkers.length === 0;
+  $("#empty-title").textContent = noListings ? "Be the first skilled neighbor here." : favoritesOnly ? "Your saved list is waiting." : "No close match yet.";
+  $("#empty-copy").textContent = noListings
+    ? "Jirani is getting started here. List your skills or invite a trusted local worker to join the neighborhood directory."
+    : favoritesOnly ? "Save a worker with the heart button and they will be easy to find here." : "Try a nearby service or area, clear a filter, or invite someone you trust to be listed.";
+  const reset = $("#reset-filters");
+  reset.hidden = !(service || area || query || favoritesOnly);
+  const filterChips = [];
+  if (service) filterChips.push({ key: "service", label: FEATURED_SERVICES.find((item) => item.name.toLowerCase() === service.toLowerCase())?.label || service });
+  if (area) filterChips.push({ key: "area", label: area });
+  if (query) filterChips.push({ key: "search", label: `“${query}”` });
+  if (favoritesOnly) filterChips.push({ key: "saved", label: "Saved workers" });
+  const filterHost = $("#active-filters");
+  filterHost.replaceChildren(...filterChips.map(({ key, label }) => {
+    const chip = document.createElement("button");
+    chip.type = "button"; chip.className = "active-filter"; chip.dataset.removeFilter = key;
+    chip.setAttribute("aria-label", `Remove ${label} filter`); chip.textContent = `${label} ×`;
+    return chip;
+  }));
   selectedCategory = service;
   $$(".category-chip").forEach((chip) => chip.classList.toggle("active", chip.dataset.service === service));
 }
@@ -576,9 +636,14 @@ function showProfileForm(existing = null) {
   const form = $("#profile-form");
   const user = currentUser();
   if (!user) return;
+  pendingProfilePhoto = null;
+  removeProfilePhoto = false;
+  if (profilePreviewUrl) URL.revokeObjectURL(profilePreviewUrl);
+  profilePreviewUrl = null;
   $("#profile-form .legal-note").textContent = backendConfigured
-    ? "Your profile stays out of public search until you choose to list it. You can change this later in Settings."
+    ? "Your details stay out of public search until you list your profile. Your work phone and photo are shown only while it is listed."
     : "This preview stores it only in this browser.";
+  form.elements.displayName.value = existing?.displayName || user.name;
   form.elements.service.value = existing?.service || "";
   form.elements.area.value = existing?.area || "";
   form.elements.phone.value = existing?.phone || "";
@@ -589,8 +654,71 @@ function showProfileForm(existing = null) {
   form.elements.availability.value = existing?.availability || "available";
   form.elements.consent.checked = false;
   form.elements.isListed.checked = existing?.isListed ?? true;
+  $("#profile-photo-input").value = "";
+  setProfilePhotoPreview(existing?.photoUrl || existing?.photoDataUrl || "", existing?.displayName || user.name);
+  $("[data-remove-profile-photo]").hidden = !(existing?.photoPath || existing?.photoDataUrl || existing?.photoUrl);
   $("#profile-error").textContent = "";
   showModal(profileModal);
+}
+function setProfilePhotoPreview(url, name) {
+  const image = $("#profile-photo-image");
+  const initials = $("#profile-photo-initials");
+  const letters = String(name || "Jirani").trim().split(/\s+/).slice(0, 2).map((part) => part[0]).join("").toUpperCase();
+  initials.textContent = letters || "J";
+  image.hidden = !url;
+  initials.hidden = Boolean(url);
+  if (url) image.src = url;
+  else image.removeAttribute("src");
+}
+async function resizeProfilePhoto(file) {
+  if (!file || !["image/jpeg", "image/png", "image/webp"].includes(file.type)) throw new Error("Choose a JPEG, PNG, or WebP photo.");
+  if (file.size > 8 * 1024 * 1024) throw new Error("Choose a photo smaller than 8 MB. Jirani will resize it for your profile.");
+  const bitmap = await createImageBitmap(file);
+  if (bitmap.width > 8000 || bitmap.height > 8000 || bitmap.width * bitmap.height > 40000000) { bitmap.close(); throw new Error("That photo is too large to process. Choose a smaller image."); }
+  const side = Math.min(bitmap.width, bitmap.height);
+  const sx = Math.round((bitmap.width - side) / 2);
+  const sy = Math.round((bitmap.height - side) / 2);
+  const canvas = document.createElement("canvas");
+  canvas.width = 512; canvas.height = 512;
+  const context = canvas.getContext("2d", { alpha: false });
+  if (!context) { bitmap.close(); throw new Error("This browser could not prepare the photo."); }
+  context.drawImage(bitmap, sx, sy, side, side, 0, 0, 512, 512);
+  bitmap.close();
+  return new Promise((resolve, reject) => canvas.toBlob((blob) => blob ? resolve(blob) : reject(new Error("The photo could not be resized. Try a different image.")), "image/jpeg", 0.82));
+}
+$("#profile-photo-input").addEventListener("change", async (event) => {
+  const file = event.target.files?.[0];
+  if (!file) return;
+  const error = $("#profile-error"); error.textContent = "";
+  try {
+    pendingProfilePhoto = await resizeProfilePhoto(file);
+    removeProfilePhoto = false;
+    if (profilePreviewUrl) URL.revokeObjectURL(profilePreviewUrl);
+    profilePreviewUrl = URL.createObjectURL(pendingProfilePhoto);
+    setProfilePhotoPreview(profilePreviewUrl, $("#profile-form").elements.displayName.value);
+    $("[data-remove-profile-photo]").hidden = false;
+  } catch (photoError) { event.target.value = ""; error.textContent = photoError.message; }
+});
+$("[data-remove-profile-photo]").addEventListener("click", () => {
+  pendingProfilePhoto = null;
+  removeProfilePhoto = true;
+  if (profilePreviewUrl) URL.revokeObjectURL(profilePreviewUrl);
+  profilePreviewUrl = null;
+  $("#profile-photo-input").value = "";
+  const name = $("#profile-form").elements.displayName.value;
+  setProfilePhotoPreview("", name);
+  $("[data-remove-profile-photo]").hidden = true;
+});
+$("#profile-form").elements.displayName.addEventListener("input", (event) => {
+  if (!pendingProfilePhoto && !$("#profile-photo-image").src) setProfilePhotoPreview("", event.target.value);
+});
+function blobAsDataUrl(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(new Error("The photo could not be saved in this preview."));
+    reader.readAsDataURL(blob);
+  });
 }
 async function handleSignup(formData) {
   const name = formData.get("name").trim();
@@ -722,16 +850,27 @@ $("#profile-form").addEventListener("submit", async (event) => {
   if (!/^\+?[0-9 ()-]{8,20}$/.test(data.get("phone").trim())) { error.textContent = "Enter a valid phone number, including the country code."; return; }
   if (!data.get("consent")) { error.textContent = "Please agree to show your profile details in the directory."; return; }
   const user = currentUser();
-  const profile = { service: data.get("service").trim(), area: data.get("area").trim(), phone: data.get("phone").trim(), years: Number(data.get("years")), skills: data.get("skills").trim(), bio: data.get("bio").trim(), priceHint: data.get("priceHint").trim(), availability: data.get("availability"), isListed: Boolean(data.get("isListed")) };
-  if (!profile.service || !profile.area || !profile.phone || !Number.isFinite(profile.years)) { error.textContent = "Please complete each required field."; return; }
+  const profile = { displayName: data.get("displayName").trim(), service: data.get("service").trim(), area: data.get("area").trim(), phone: data.get("phone").trim(), years: Number(data.get("years")), skills: data.get("skills").trim(), bio: data.get("bio").trim(), priceHint: data.get("priceHint").trim(), availability: data.get("availability"), isListed: Boolean(data.get("isListed")) };
+  if (profile.displayName.length < 2 || profile.displayName.length > 100) { error.textContent = "Enter a name between 2 and 100 characters."; return; }
+  if (!profile.service || !profile.area || !profile.phone || !Number.isFinite(profile.years) || profile.years < 0 || profile.years > 70) { error.textContent = "Please complete each required field with valid values."; return; }
   if (backendConfigured) {
     if (!supabaseClient || !user?.id) { error.textContent = "Sign in again before saving your profile."; return; }
     const skills = profile.skills.split(",").map((item) => item.trim()).filter(Boolean).slice(0, 8);
+    const oldPhotoPath = backendProfile?.profile_photo_path || "";
+    let photoPath = removeProfilePhoto ? null : oldPhotoPath || null;
+    let uploadedPhotoPath = "";
+    if (pendingProfilePhoto) {
+      const uniqueName = globalThis.crypto?.randomUUID?.() || Math.random().toString(36).slice(2);
+      uploadedPhotoPath = `${user.id}/profile-${Date.now()}-${uniqueName}.jpg`;
+      const { error: uploadError } = await supabaseClient.storage.from(PHOTO_BUCKET).upload(uploadedPhotoPath, pendingProfilePhoto, { contentType: "image/jpeg", cacheControl: "3600", upsert: false });
+      if (uploadError) { error.textContent = `Photo upload failed: ${uploadError.message}`; return; }
+      photoPath = uploadedPhotoPath;
+    }
     const { data: savedProfile, error: saveError } = await supabaseClient
       .from("worker_profiles")
       .upsert({
         user_id: user.id,
-        display_name: user.name,
+        display_name: profile.displayName,
         service: profile.service,
         locality: profile.area,
         contact_phone: profile.phone,
@@ -741,23 +880,49 @@ $("#profile-form").addEventListener("submit", async (event) => {
         price_hint: profile.priceHint,
         availability: profile.availability,
         contact_consent: true,
-        is_listed: profile.isListed
+        is_listed: profile.isListed,
+        profile_photo_path: photoPath
       }, { onConflict: "user_id" })
-      .select("user_id,display_name,service,locality,contact_phone,years_experience,skills,contact_consent,is_listed,verification_status,bio,price_hint,availability")
+      .select("user_id,display_name,service,locality,contact_phone,years_experience,skills,contact_consent,is_listed,verification_status,bio,price_hint,availability,profile_photo_path")
       .single();
-    if (saveError) { error.textContent = saveError.message; return; }
+    if (saveError) {
+      if (uploadedPhotoPath) await supabaseClient.storage.from(PHOTO_BUCKET).remove([uploadedPhotoPath]);
+      error.textContent = saveError.message; return;
+    }
     backendProfile = savedProfile;
+    pendingProfilePhoto = null; removeProfilePhoto = false;
+    try { await loadOwnBackendProfile(); }
+    catch (profileLoadError) { error.textContent = `Profile saved, but your photo preview failed to load: ${profileLoadError.message}`; return; }
+    if (oldPhotoPath && oldPhotoPath !== photoPath) await supabaseClient.storage.from(PHOTO_BUCKET).remove([oldPhotoPath]);
     try { await loadBackendWorkers(); }
     catch (loadError) { error.textContent = `Profile saved, but the directory refresh failed: ${loadError.message}`; return; }
     closeModal(profileModal); render(); updateAccountActions(); openDashboard();
     showToast(profile.isListed ? "Your profile is live in the directory." : "Your profile is saved privately. You can list it later in Settings.");
     return;
   }
-  saveAccount({ ...user, profile });
+  profile.photoDataUrl = pendingProfilePhoto ? await blobAsDataUrl(pendingProfilePhoto) : removeProfilePhoto ? "" : user.profile?.photoDataUrl || "";
+  pendingProfilePhoto = null; removeProfilePhoto = false;
+  saveAccount({ ...user, name: profile.displayName, profile });
   closeModal(profileModal); render(); updateAccountActions(); openDashboard(); showToast("Worker profile saved in this browser preview.");
 });
 
 document.addEventListener("click", async (event) => {
+  const quickService = event.target.closest("[data-quick-service]");
+  if (quickService) {
+    serviceFilter.value = quickService.dataset.quickService;
+    areaFilter.value = ""; $("#directory-query").value = ""; $("#favorites-only").checked = false;
+    selectedCategory = serviceFilter.value; render(); $("#directory").scrollIntoView({ behavior: "smooth" }); return;
+  }
+  if (event.target.closest("[data-mobile-find]")) { backHome(); $("#directory").scrollIntoView({ behavior: "smooth" }); return; }
+  const removeFilter = event.target.closest("[data-remove-filter]");
+  if (removeFilter) {
+    const key = removeFilter.dataset.removeFilter;
+    if (key === "service") { serviceFilter.value = ""; selectedCategory = ""; }
+    if (key === "area") areaFilter.value = "";
+    if (key === "search") $("#directory-query").value = "";
+    if (key === "saved") $("#favorites-only").checked = false;
+    render(); return;
+  }
   if (event.target.closest("[data-share-app]")) { await shareJirani(); return; }
   if (event.target.closest("[data-open-settings]")) { openSettings(); return; }
   if (event.target.closest("[data-close-settings]")) { closeSettings(); return; }
@@ -817,7 +982,7 @@ $("#directory-query").addEventListener("input", render);
 $("#sort-workers").addEventListener("change", render);
 $("#favorites-only").addEventListener("change", render);
 $("#search-form").addEventListener("submit", (event) => { event.preventDefault(); render(); $("#directory").scrollIntoView({ behavior: "smooth" }); });
-$("#reset-filters").addEventListener("click", () => { serviceFilter.value = ""; areaFilter.value = ""; selectedCategory = ""; render(); });
+$("#reset-filters").addEventListener("click", () => { serviceFilter.value = ""; areaFilter.value = ""; selectedCategory = ""; $("#directory-query").value = ""; $("#favorites-only").checked = false; render(); });
 document.addEventListener("keydown", (event) => {
   if (event.key === "Escape") {
     const topmost = $$(".modal-backdrop").filter((modal) => !modal.hidden).at(-1);
