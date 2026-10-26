@@ -27,7 +27,7 @@ The frontend key must be a publishable key only. Never place a Supabase secret o
 
 ## Before a real pilot
 
-- Account records are stored in this browser's local storage. Passwords are not saved, but login is only a UI demonstration; it does not authenticate a password or verify an email.
+- Sign-up and login use Supabase Auth with email confirmation. The browser does not save account passwords.
 - Verification requests are stored in Supabase, but reviewers currently process them manually in Supabase Studio. Jirani does not independently check identity, and verification does not guarantee work quality or safety.
 - Nine directory entries are fictional and hidden when the backend is connected. Add real profiles only after getting each worker's consent and confirming details.
 - Supabase's default email sender has low rate limits. Configure SMTP before a wider pilot.
