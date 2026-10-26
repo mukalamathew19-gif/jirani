@@ -1,4 +1,4 @@
-const CACHE_NAME = "jirani-backend-v2";
+const CACHE_NAME = "jirani-share-v1";
 const APP_FILES = ["./", "./index.html", "./styles.css", "./app-ui.css", "./app.js", "./supabase-config.js", "./manifest.webmanifest", "./icon.svg"];
 self.addEventListener("install", (event) => {
   event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_FILES)));
