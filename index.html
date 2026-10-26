@@ -91,3 +91,25 @@ src="app.js?v=20261027-accessibility"<!doctype html>
     <script>if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('./service-worker.js').catch(() => {});</script>
   </body>
 </html>
+
+<script>
+(() => {
+  const invite = document.querySelector(".directory-footer button");
+  if (invite) { invite.removeAttribute("data-open-auth"); invite.removeAttribute("data-role"); invite.dataset.shareApp = ""; invite.type = "button"; }
+  const share = async () => {
+    const url = "https://mukalamathew19-gif.github.io/jirani/";
+    try { if (navigator.share) await navigator.share({title:"Jirani — good people, closer to home",text:"Find local skills or share your own with your neighborhood on Jirani.",url});
+      else { await navigator.clipboard.writeText(url); const toast=document.querySelector("#toast"); if(toast){toast.textContent="Jirani link copied. Share it in a message or on social media.";toast.classList.add("show");setTimeout(()=>toast.classList.remove("show"),3400);} }
+    } catch(error) { if(error.name!=="AbortError"){const toast=document.querySelector("#toast");if(toast){toast.textContent="Copy and share the Jirani link: "+url;toast.classList.add("show");}} }
+  };
+  document.addEventListener("click",event=>{if(event.target.closest(".directory-footer button")){event.preventDefault();event.stopImmediatePropagation();share();}},true);
+  const directory=document.querySelector("#directory");
+  if(directory && !directory.querySelector(".text-size-control")){
+    const control=document.createElement("div");control.className="text-size-control";control.setAttribute("role","group");control.setAttribute("aria-label","Text size");control.style.cssText="display:flex;align-items:center;justify-content:flex-end;gap:8px;margin:12px 0;color:#596357;font-size:14px";
+    const label=document.createElement("span");label.textContent="Text size";control.append(label);
+    [[1,"A","Standard text size"],[1.1,"A+","Large text"],[1.2,"A++","Largest text"]].forEach(([size,text,name])=>{const button=document.createElement("button");button.type="button";button.dataset.fontSize=size;button.setAttribute("aria-label",name);button.setAttribute("aria-pressed","false");button.textContent=text;button.style.cssText="min-width:42px;min-height:42px;border:1px solid #dfe4da;border-radius:5px;background:#fff;color:#28573d;font:600 16px sans-serif";button.addEventListener("click",()=>{document.documentElement.style.zoom=String(size);localStorage.setItem("jirani-font-scale",String(size));control.querySelectorAll("button").forEach(b=>b.setAttribute("aria-pressed",String(Number(b.dataset.fontSize)===Number(size))));});control.append(button);});
+    document.querySelector("#directory .section-heading")?.after(control);
+    const size=Number(localStorage.getItem("jirani-font-scale")||1.1);document.documentElement.style.zoom=String(size);control.querySelectorAll("button").forEach(b=>b.setAttribute("aria-pressed",String(Number(b.dataset.fontSize)===size)));
+  }
+})();
+</script>
