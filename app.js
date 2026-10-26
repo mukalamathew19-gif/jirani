@@ -523,3 +523,28 @@ document.addEventListener("click", (event) => {
   event.stopImmediatePropagation();
   shareJirani();
 }, true);
+
+
+const directorySection = $("#directory");
+if (directorySection && !directorySection.querySelector(".text-size-control")) {
+  const control = document.createElement("div");
+  control.className = "text-size-control";
+  control.setAttribute("role", "group");
+  control.setAttribute("aria-label", "Text size");
+  control.style.cssText = "display:flex;align-items:center;justify-content:flex-end;gap:7px;margin:12px 0;color:#596357;font-size:14px";
+  const label = document.createElement("span"); label.textContent = "Text size"; control.append(label);
+  [[1,"A","Standard text size"],[1.1,"A+","Large text"],[1.2,"A++","Largest text"]].forEach(([size,text,name]) => {
+    const button = document.createElement("button"); button.type = "button"; button.dataset.fontSize = String(size); button.setAttribute("aria-label", name); button.setAttribute("aria-pressed", "false"); button.textContent = text;
+    button.style.cssText = "min-width:42px;min-height:42px;padding:6px 9px;border:1px solid #dfe4da;border-radius:5px;background:#fff;color:#28573d;font:600 16px sans-serif";
+    button.addEventListener("click", () => { const chosen=Number(size); document.documentElement.style.zoom=String(chosen); localStorage.setItem("jirani-font-scale",String(chosen)); control.querySelectorAll("button").forEach(b=>b.setAttribute("aria-pressed",String(Number(b.dataset.fontSize)===chosen))); });
+    control.append(button);
+  });
+  $("#directory .section-heading")?.after(control);
+  const chosen=Number(localStorage.getItem("jirani-font-scale")||1.1); document.documentElement.style.zoom=String(chosen);
+  control.querySelectorAll("button").forEach(b=>b.setAttribute("aria-pressed",String(Number(b.dataset.fontSize)===chosen)));
+}
+document.addEventListener("click", (event) => {
+  const invite = event.target.closest(".directory-footer button");
+  if (!invite) return;
+  event.preventDefault(); event.stopImmediatePropagation(); shareJirani();
+}, true);
