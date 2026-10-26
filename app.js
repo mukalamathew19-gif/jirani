@@ -515,3 +515,11 @@ async function shareJirani() {
 document.addEventListener("click", async (event) => {
   if (event.target.closest("[data-share-app]")) await shareJirani();
 });
+
+document.addEventListener("click", (event) => {
+  const inviteButton = event.target.closest(".directory-footer [data-open-auth]");
+  if (!inviteButton) return;
+  event.preventDefault();
+  event.stopImmediatePropagation();
+  shareJirani();
+}, true);
