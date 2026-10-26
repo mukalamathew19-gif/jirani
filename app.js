@@ -11,7 +11,7 @@ const DEMO_WORKERS = [
   { id: "demo-8", name: "Joseph Maina", service: "Mechanic", area: "Industrial Area", years: 12, initials: "JM", tags: ["Diagnostics", "Servicing"], phone: "", demo: true },
   { id: "demo-9", name: "Lydia Achieng", service: "Caterer", area: "Westlands", years: 6, initials: "LA", tags: ["Events", "Home meals"], phone: "", demo: true }
 ];
-const KEYS = { accounts: "jirani-preview-accounts", session: "jirani-preview-session" };
+const KEYS = { accounts: "jirani-preview-accounts", session: "jirani-preview-session", favorites: "jirani-favorites", settings: "jirani-settings", requests: "jirani-preview-requests", reviews: "jirani-preview-reviews" };
 const supabaseConfig = window.JIRANI_SUPABASE_CONFIG || {};
 const backendConfigured = Boolean(supabaseConfig.url && supabaseConfig.publishableKey);
 let supabaseClient = null;
@@ -31,6 +31,12 @@ const profileModal = $("#profile-modal");
 let authMode = "login";
 let selectedCategory = "";
 let toastTimer;
+let pendingQuoteWorker = null;
+let backendRequests = [];
+let backendReviews = [];
+let installPrompt = null;
+let lastModalTrigger = null;
+let deepLinkHandled = false;
 
 function read(key, fallback) {
   try { return JSON.parse(localStorage.getItem(key)) ?? fallback; } catch { return fallback; }
@@ -46,7 +52,9 @@ function currentUser() {
       area: backendProfile.locality,
       phone: backendProfile.contact_phone,
       years: backendProfile.years_experience,
-      skills: backendProfile.skills.join(", ")
+      skills: backendProfile.skills.join(", "),
+      bio: backendProfile.bio || "", priceHint: backendProfile.price_hint || "",
+      availability: backendProfile.availability || "available", isListed: backendProfile.is_listed
     } : null;
     return {
       id: authUser.id,
@@ -54,6 +62,7 @@ function currentUser() {
       email: authUser.email || "",
       role: metadata.account_type === "worker" ? "worker" : "customer",
       profile,
+      isListed: backendProfile?.is_listed ?? false,
       verification: backendProfile?.verification_status || "unverified"
     };
   }
@@ -69,11 +78,17 @@ function saveAccount(updated) {
 }
 function allWorkers() {
   if (backendConfigured) return backendWorkers;
-  const members = accounts().filter((account) => account.role === "worker" && account.profile).map((account) => ({
-    id: account.email, name: account.name, service: account.profile.service, area: account.profile.area,
-    years: Number(account.profile.years) || 0, initials: account.name.split(/\s+/).map((part) => part[0]).slice(0, 2).join("").toUpperCase(),
-    tags: account.profile.skills.split(",").map((item) => item.trim()).filter(Boolean).slice(0, 3), phone: account.profile.phone, verification: account.verification || "unverified", demo: false
-  }));
+  const previews = read(KEYS.reviews, []);
+  const members = accounts().filter((account) => account.role === "worker" && account.profile?.isListed !== false && account.profile).map((account) => {
+    const reviews = previews.filter((review) => String(review.workerId) === String(account.email));
+    const total = reviews.reduce((sum, review) => sum + Number(review.rating || 0), 0);
+    return {
+      id: account.email, name: account.name, service: account.profile.service, area: account.profile.area,
+      years: Number(account.profile.years) || 0, initials: account.name.split(/\s+/).map((part) => part[0]).slice(0, 2).join("").toUpperCase(),
+      tags: (account.profile.skills || "").split(",").map((item) => item.trim()).filter(Boolean).slice(0, 3), phone: account.profile.phone, verification: account.verification || "unverified", demo: false,
+      bio: account.profile.bio || "", priceHint: account.profile.priceHint || "", availability: account.profile.availability || "available", rating: reviews.length ? total / reviews.length : 0, reviewCount: reviews.length
+    };
+  });
   return [...members, ...DEMO_WORKERS];
 }
 function showToast(message) {
@@ -82,6 +97,80 @@ function showToast(message) {
   toast.classList.add("show");
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => toast.classList.remove("show"), 3400);
+}
+function settings() { return read(KEYS.settings, {}); }
+function saveSettings(next) {
+  const value = { ...settings(), ...next };
+  localStorage.setItem(KEYS.settings, JSON.stringify(value));
+  return value;
+}
+function setFontScale(scale) {
+  const value = [1, 1.1, 1.2].includes(Number(scale)) ? Number(scale) : 1.1;
+  document.documentElement.style.zoom = String(value);
+  saveSettings({ fontSize: value });
+  $$('[data-font-size]').forEach((button) => button.setAttribute("aria-pressed", String(Number(button.dataset.fontSize) === value)));
+}
+function applyDisplaySettings() {
+  const prefs = settings();
+  document.body.classList.toggle("high-contrast", Boolean(prefs.highContrast));
+  document.body.classList.toggle("reduce-motion", Boolean(prefs.reduceMotion));
+  $("#setting-contrast").checked = Boolean(prefs.highContrast);
+  $("#setting-motion").checked = Boolean(prefs.reduceMotion);
+  setFontScale(prefs.fontSize || 1.1);
+}
+function openSettings() {
+  const user = currentUser();
+  $("#settings-account-copy").textContent = user ? `${user.name} · ${user.email}` : "You are browsing Jirani.";
+  $("[data-settings-signout]").hidden = !user;
+  const row = $("#listing-setting-row");
+  const copy = $("#privacy-settings-copy");
+  const available = Boolean(user?.role === "worker" && user.profile);
+  row.hidden = !available;
+  copy.hidden = available;
+  if (available) $("#setting-listed").checked = Boolean(user.isListed);
+  showModal($("#settings-modal"));
+}
+function closeSettings() { closeModal($("#settings-modal")); }
+function showModal(modal) {
+  lastModalTrigger = document.activeElement;
+  modal.hidden = false;
+  document.body.classList.add("modal-open");
+  modal.querySelector(".modal-close")?.focus();
+}
+async function shareJirani() {
+  const url = "https://mukalamathew19-gif.github.io/jirani/";
+  const data = { title: "Jirani — good people, closer to home", text: "Find local skills or share your own with your neighborhood on Jirani.", url };
+  if (navigator.share) { try { await navigator.share(data); } catch (error) { if (error.name !== "AbortError") showToast("Could not open the share menu. Copy the Jirani link from the address bar."); } return; }
+  await copyShareLink(url);
+}
+async function copyShareLink(url) {
+  try {
+    if (navigator.clipboard?.writeText) await navigator.clipboard.writeText(url);
+    else {
+      const field = document.createElement("textarea");
+      field.value = url; field.setAttribute("readonly", ""); field.style.position = "fixed"; field.style.opacity = "0";
+      document.body.append(field); field.select();
+      const copied = document.execCommand("copy"); field.remove();
+      if (!copied) throw new Error("Clipboard unavailable");
+    }
+    showToast("Link copied. Send it to a neighbor or share it in a group.");
+  } catch { showToast(`Copy this Jirani link to share: ${url}`); }
+}
+function highlightSharedWorker() {
+  if (deepLinkHandled) return;
+  const workerId = new URLSearchParams(location.search).get("worker");
+  if (!workerId) { deepLinkHandled = true; return; }
+  const worker = findWorker(workerId);
+  if (!worker) return;
+  deepLinkHandled = true;
+  setTimeout(() => {
+    const card = $(`[data-worker-id="${CSS.escape(String(worker.id))}"]`);
+    card?.scrollIntoView({ behavior: "smooth", block: "center" });
+    card?.classList.add("shared-highlight");
+    setTimeout(() => card?.classList.remove("shared-highlight"), 2800);
+    history.replaceState({}, "", `${location.pathname}#directory`);
+    showToast(`Showing ${worker.name}’s Jirani profile.`);
+  }, 160);
 }
 function setAuthMode(mode) {
   authMode = mode;
@@ -103,13 +192,14 @@ function openAuth(mode = "login", role = "customer") {
   setAuthMode(mode);
   const roleInput = $(`input[name="role"][value="${role}"]`);
   if (roleInput) roleInput.checked = true;
-  authModal.hidden = false;
-  document.body.classList.add("modal-open");
+  showModal(authModal);
   setTimeout(() => $("#auth-form input[type=email]")?.focus(), 40);
 }
 function closeModal(modal) {
   modal.hidden = true;
-  if (authModal.hidden && profileModal.hidden) document.body.classList.remove("modal-open");
+  const remaining = $$(".modal-backdrop").filter((item) => !item.hidden);
+  document.body.classList.toggle("modal-open", remaining.length > 0);
+  if (!remaining.length) lastModalTrigger?.focus?.();
 }
 function updateAccountActions() {
   const user = currentUser();
@@ -134,6 +224,9 @@ function mapBackendWorker(row) {
     initials,
     tags: row.skills || [],
     phone: row.contact_phone,
+    bio: row.bio || "", priceHint: row.price_hint || "",
+    availability: row.availability || "available",
+    rating: row.rating || 0, reviewCount: row.reviewCount || 0,
     verification: row.verification_status,
     demo: false
   };
@@ -142,12 +235,23 @@ async function loadBackendWorkers() {
   if (!supabaseClient) return;
   const { data, error } = await supabaseClient
     .from("worker_profiles")
-    .select("user_id,display_name,service,locality,contact_phone,years_experience,skills,verification_status")
+    .select("user_id,display_name,service,locality,contact_phone,years_experience,skills,verification_status,bio,price_hint,availability")
     .eq("is_listed", true)
     .eq("contact_consent", true)
     .order("created_at", { ascending: false });
   if (error) throw error;
-  backendWorkers = (data || []).map(mapBackendWorker);
+  const { data: reviews, error: reviewError } = await supabaseClient.from("worker_reviews").select("worker_id,rating");
+  if (reviewError) throw reviewError;
+  backendReviews = reviews || [];
+  const ratings = new Map();
+  backendReviews.forEach(({ worker_id, rating }) => {
+    const entry = ratings.get(worker_id) || { total: 0, count: 0 };
+    entry.total += Number(rating); entry.count += 1; ratings.set(worker_id, entry);
+  });
+  backendWorkers = (data || []).map((row) => {
+    const rating = ratings.get(row.user_id) || { total: 0, count: 0 };
+    return mapBackendWorker({ ...row, rating: rating.count ? rating.total / rating.count : 0, reviewCount: rating.count });
+  });
 }
 async function loadOwnBackendProfile() {
   const authUser = backendSession?.user;
@@ -157,7 +261,7 @@ async function loadOwnBackendProfile() {
   }
   const { data, error } = await supabaseClient
     .from("worker_profiles")
-    .select("user_id,display_name,service,locality,contact_phone,years_experience,skills,contact_consent,is_listed,verification_status")
+    .select("user_id,display_name,service,locality,contact_phone,years_experience,skills,contact_consent,is_listed,verification_status,bio,price_hint,availability")
     .eq("user_id", authUser.id)
     .maybeSingle();
   if (error) throw error;
@@ -168,6 +272,7 @@ async function refreshBackendState() {
     await Promise.all([loadBackendWorkers(), loadOwnBackendProfile()]);
     updateAccountActions();
     render();
+    highlightSharedWorker();
   } catch (error) {
     showToast(`Backend connection issue: ${error.message}`);
   }
@@ -223,6 +328,7 @@ function renderFilterOptions() {
 function makeCard(worker, index) {
   const card = document.createElement("article");
   card.className = "worker-card";
+  card.dataset.workerId = worker.id;
   const top = document.createElement("div");
   top.className = "card-top";
   const avatar = document.createElement("div");
@@ -232,6 +338,7 @@ function makeCard(worker, index) {
   const badge = document.createElement("span");
   badge.className = `availability ${worker.verification === "verified" ? "verified" : worker.demo ? "sample" : "unverified"}`;
   badge.textContent = worker.verification === "verified" ? "Identity checked" : worker.demo ? "Sample profile" : "Not verified";
+  if (worker.availability === "paused") badge.textContent = "Not taking jobs";
   top.append(badge);
   const name = document.createElement("h3"); name.textContent = worker.name;
   const role = document.createElement("p"); role.className = "worker-role"; role.textContent = worker.service;
@@ -240,27 +347,51 @@ function makeCard(worker, index) {
   const pin = document.createElement("span"); pin.setAttribute("aria-hidden", "true"); pin.textContent = "⌖";
   area.append(pin, document.createTextNode(worker.area));
   const years = document.createElement("span"); years.className = "work-years"; years.textContent = `${worker.years} years’ experience`;
-  details.append(area, years);
+  const availability = document.createElement("span");
+  availability.className = `availability-state ${worker.availability || "available"}`;
+  availability.textContent = worker.availability === "busy" ? "Limited availability" : worker.availability === "paused" ? "Taking a break" : "Available";
+  details.append(area, years, availability);
   const tags = document.createElement("div"); tags.className = "card-tags";
   (worker.tags.length ? worker.tags : ["Local service"]).forEach((tag) => { const item = document.createElement("span"); item.className = "card-tag"; item.textContent = tag; tags.append(item); });
+  const trust = document.createElement("p"); trust.className = "card-trust";
+  trust.textContent = worker.reviewCount ? `★ ${worker.rating.toFixed(1)} · ${worker.reviewCount} ${worker.reviewCount === 1 ? "review" : "reviews"}` : "New to Jirani · no reviews yet";
+  const description = document.createElement("p"); description.className = "card-description"; description.textContent = worker.bio || "Local professional ready to discuss your project.";
+  const quote = document.createElement("p"); quote.className = "card-price"; quote.textContent = worker.priceHint || "Ask for a quote";
+  const expanded = document.createElement("div"); expanded.className = "card-expanded"; expanded.hidden = true;
+  expanded.append(description, quote);
+  const detailActions = document.createElement("div"); detailActions.className = "detail-actions";
+  const report = document.createElement("button"); report.type = "button"; report.className = "text-action report-action"; report.dataset.reportWorker = worker.id; report.textContent = "Report profile";
+  const share = document.createElement("button"); share.type = "button"; share.className = "text-action"; share.dataset.shareWorker = worker.id; share.textContent = "Share profile ↗";
+  detailActions.append(report, share); expanded.append(detailActions);
   const actions = document.createElement("div"); actions.className = "card-actions";
-  if (worker.demo || !worker.phone) {
-    const label = document.createElement("span"); label.className = "card-button unavailable"; label.textContent = "Sample profile";
-    const contact = document.createElement("button"); contact.className = "card-button primary"; contact.type = "button"; contact.textContent = "Contact worker"; contact.disabled = true;
-    actions.append(label, contact);
-  } else {
+  const favorite = document.createElement("button"); favorite.type = "button"; favorite.className = "card-button favorite-button";
+  favorite.dataset.favoriteWorker = worker.id;
+  const isFavorite = read(KEYS.favorites, []).includes(String(worker.id));
+  favorite.setAttribute("aria-pressed", String(isFavorite)); favorite.textContent = isFavorite ? "♥ Saved" : "♡ Save";
+  const view = document.createElement("button"); view.type = "button"; view.className = "card-button"; view.dataset.toggleDetails = ""; view.setAttribute("aria-expanded", "false"); view.textContent = "Profile details";
+  const request = document.createElement("button"); request.type = "button"; request.className = "card-button primary"; request.dataset.requestQuote = worker.id; request.textContent = worker.availability === "paused" ? "Unavailable" : "Request a quote"; request.disabled = worker.availability === "paused";
+  actions.append(favorite, view, request);
+  if (!worker.demo && worker.phone) {
     const call = document.createElement("a"); call.className = "card-button"; call.href = `tel:${worker.phone}`; call.textContent = "Call ↗";
-    const whatsapp = document.createElement("a"); whatsapp.className = "card-button primary"; whatsapp.href = `https://wa.me/${worker.phone.replace(/\D/g, "")}`; whatsapp.target = "_blank"; whatsapp.rel = "noopener noreferrer"; whatsapp.textContent = "WhatsApp ↗";
-    actions.append(call, whatsapp);
+    let whatsappPhone = worker.phone.replace(/\D/g, "");
+    if (whatsappPhone.startsWith("0")) whatsappPhone = `254${whatsappPhone.slice(1)}`;
+    const whatsapp = document.createElement("a"); whatsapp.className = "card-button primary"; whatsapp.href = `https://wa.me/${whatsappPhone}`; whatsapp.target = "_blank"; whatsapp.rel = "noopener noreferrer"; whatsapp.textContent = "WhatsApp ↗";
+    detailActions.append(call, whatsapp);
   }
-  card.append(top, name, role, details, tags, actions);
+  card.append(top, name, role, details, tags, trust, actions, expanded);
   return card;
 }
 function render() {
   renderFilterOptions();
   const service = serviceFilter.value;
   const area = areaFilter.value;
-  const matches = allWorkers().filter((worker) => (!service || worker.service.toLowerCase() === service.toLowerCase()) && (!area || worker.area.toLowerCase() === area.toLowerCase()));
+  const query = $("#directory-query")?.value.trim().toLowerCase() || "";
+  const sort = $("#sort-workers")?.value || "recent";
+  const favoritesOnly = Boolean($("#favorites-only")?.checked);
+  const favorites = read(KEYS.favorites, []);
+  let matches = allWorkers().filter((worker) => (!favoritesOnly || favorites.includes(String(worker.id))) && (!service || worker.service.toLowerCase() === service.toLowerCase()) && (!area || worker.area.toLowerCase() === area.toLowerCase()) && (!query || [worker.name, worker.service, worker.area, worker.bio, ...(worker.tags || [])].join(" ").toLowerCase().includes(query)));
+  if (sort === "experience") matches = matches.sort((a, b) => b.years - a.years);
+  if (sort === "rating") matches = matches.sort((a, b) => b.rating - a.rating || b.reviewCount - a.reviewCount);
   listingGrid.replaceChildren(...matches.map((worker, index) => makeCard(worker, index)));
   resultCount.textContent = `${matches.length} ${matches.length === 1 ? "person" : "people"}`;
   emptyState.hidden = matches.length > 0;
@@ -288,14 +419,16 @@ function openDashboard() {
     <div class="dashboard-head"><div><div class="eyebrow section-eyebrow">YOUR JIRANI ACCOUNT</div><h1>Hello, <em>${escapeHtml(user.name.split(" ")[0])}.</em></h1><p>Manage your account and keep your local details up to date.</p></div><button class="outline-button" data-back-home>← Back to directory</button></div>
     <div class="dashboard-grid">
       <section class="dashboard-card"><div class="dash-card-heading"><span class="dash-icon">${isWorker ? "✳" : "⌕"}</span><div><h2>${isWorker ? "Your worker profile" : "Your account"}</h2><p>${isWorker ? "How neighbors see your listing" : "Your Jirani details"}</p></div></div>
-        ${isWorker && profile ? `<div class="profile-summary"><div><span>Service</span><b>${escapeHtml(profile.service)}</b></div><div><span>Work area</span><b>${escapeHtml(profile.area)}</b></div><div><span>Contact phone</span><b>${escapeHtml(profile.phone)}</b></div><div><span>Experience</span><b>${escapeHtml(profile.years)} years</b></div></div><button class="outline-button full-button" data-edit-profile>Edit profile</button>` : isWorker ? `<p class="dash-copy">Finish your profile so people nearby can find and contact you.</p><button class="submit-button" data-create-profile>Create my worker profile <span>→</span></button>` : `<div class="profile-summary"><div><span>Name</span><b>${escapeHtml(user.name)}</b></div><div><span>Email</span><b>${escapeHtml(user.email)}</b></div></div><button class="outline-button full-button" data-back-home>Find a worker</button>`}
+        ${isWorker && profile ? `<div class="profile-summary"><div><span>Service</span><b>${escapeHtml(profile.service)}</b></div><div><span>Work area</span><b>${escapeHtml(profile.area)}</b></div><div><span>Contact phone</span><b>${escapeHtml(profile.phone)}</b></div><div><span>Experience</span><b>${escapeHtml(profile.years)} years</b></div><div><span>Availability</span><b>${escapeHtml(profile.availability || "available")}</b></div><div><span>Directory</span><b>${user.isListed ? "Public" : "Private"}</b></div></div><button class="outline-button full-button" data-edit-profile>Edit profile</button><button class="text-action full-button" data-open-settings>Privacy and display settings</button>` : isWorker ? `<p class="dash-copy">Finish your profile so people nearby can find and contact you.</p><button class="submit-button" data-create-profile>Create my worker profile <span>→</span></button>` : `<div class="profile-summary"><div><span>Name</span><b>${escapeHtml(user.name)}</b></div><div><span>Email</span><b>${escapeHtml(user.email)}</b></div><div><span>Saved workers</span><b>${read(KEYS.favorites, []).length}</b></div></div><button class="outline-button full-button" data-back-home>Find a worker</button>`}
       </section>
       <section class="dashboard-card verification-card"><div class="dash-card-heading"><span class="dash-icon shield">✓</span><div><h2>Trust & verification</h2><p>Clear signals help neighbors make informed choices</p></div></div>
         ${isWorker ? `<div class="verification-status"><span class="status-dot ${user.verification === "pending" ? "pending" : user.verification === "verified" ? "checked" : ""}"></span><div><b>${statusLabel}</b><small>${statusDescription}</small></div></div><p class="verification-explainer">Verification is a human review of details and references. It does not guarantee work quality, safety, or outcomes.</p>${user.verification === "pending" || user.verification === "verified" ? "" : `<button class="outline-button full-button" data-request-verification ${!profile ? "disabled" : ""}>Request verification</button>`}` : `<div class="verification-status"><span class="status-dot"></span><div><b>Check details before hiring</b><small>Contact workers directly and agree on scope, price, and timing.</small></div></div><p class="verification-explainer">${backendConfigured ? "Listings are supplied by individual workers. Check details directly before agreeing to a job." : "Sample profiles in this preview are fictional. Never pay a deposit before you have agreed on the work and verified who you are dealing with."}</p>`}
       </section>
     </div>
+    <section class="dashboard-card requests-panel"><div class="dash-card-heading"><span class="dash-icon">${isWorker ? "↗" : "⌕"}</span><div><h2>${isWorker ? "Quote inbox" : "Your requests"}</h2><p>${isWorker ? "Manage new enquiries and update customers" : "Follow up on work you have requested"}</p></div></div><div id="request-list" class="request-list"><p class="settings-copy">Loading your requests…</p></div></section>
     <div class="demo-warning"><span>ⓘ</span><p>${escapeHtml(accountNote)}</p></div>
   </div>`;
+  loadDashboardRequests();
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
 function backHome() {
@@ -338,22 +471,126 @@ async function requestVerification() {
   openDashboard();
   showToast("Verification request saved in this browser preview.");
 }
+function findWorker(id) { return allWorkers().find((worker) => String(worker.id) === String(id)); }
+function openQuoteRequest(workerId) {
+  const worker = findWorker(workerId);
+  if (!worker) { showToast("That worker profile is no longer available."); return; }
+  if (!currentUser()) {
+    pendingQuoteWorker = workerId;
+    openAuth("login", "customer");
+    showToast("Log in or create an account to send a private quote request.");
+    return;
+  }
+  if (currentUser().role === "worker") { showToast("Sign in with a customer account to request a quote."); return; }
+  pendingQuoteWorker = workerId;
+  $("#quote-worker-name").textContent = `${worker.name} · ${worker.service} · ${worker.area}`;
+  const form = $("#quote-form");
+  form.elements.locality.value = worker.area;
+  form.elements.description.value = "";
+  form.elements.date.value = "";
+  form.elements.budget.value = "";
+  $("#quote-error").textContent = "";
+  showModal($("#quote-modal"));
+}
+async function loadDashboardRequests() {
+  const user = currentUser();
+  const list = $("#request-list");
+  if (!user || !list) return;
+  if (backendConfigured) {
+    if (!supabaseClient) return;
+    const column = user.role === "worker" ? "worker_id" : "customer_id";
+    const { data, error } = await supabaseClient.from("service_requests").select("*").eq(column, user.id).order("created_at", { ascending: false });
+    if (error) { list.innerHTML = `<p class="settings-copy">Could not load requests: ${escapeHtml(error.message)}</p>`; return; }
+    backendRequests = data || [];
+    if (user.role === "customer") {
+      const { data: reviews, error: reviewError } = await supabaseClient.from("worker_reviews").select("request_id").eq("customer_id", user.id);
+      if (reviewError) { list.innerHTML = `<p class="settings-copy">Could not load reviews: ${escapeHtml(reviewError.message)}</p>`; return; }
+      backendReviews = reviews || [];
+    }
+  } else {
+    backendRequests = read(KEYS.requests, []).filter((request) => user.role === "worker" ? request.workerId === user.id : request.customerId === user.id).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }
+  if (!backendRequests.length) {
+    list.innerHTML = `<div class="request-empty"><span>✳</span><b>${user.role === "worker" ? "No requests yet" : "No requests sent yet"}</b><small>${user.role === "worker" ? "New customer quote requests will show up here." : "When you request a quote, you can follow its progress here."}</small></div>`;
+    return;
+  }
+  list.innerHTML = backendRequests.map((request) => {
+    const id = request.id;
+    const customerName = request.customer_name || request.customerName || "Neighbor";
+    const worker = findWorker(request.worker_id || request.workerId);
+    const service = request.service || worker?.service || "Service request";
+    const area = request.locality || "Local area";
+    const description = request.description || "";
+    const status = request.status || "new";
+    let controls = "";
+    if (user.role === "worker" && status === "new") controls = `<button data-request-update="accepted" data-request-id="${escapeHtml(id)}">Accept</button><button class="secondary" data-request-update="declined" data-request-id="${escapeHtml(id)}">Decline</button>`;
+    if (user.role === "worker" && status === "accepted") controls = `<button data-request-update="completed" data-request-id="${escapeHtml(id)}">Mark completed</button>`;
+    if (user.role === "customer" && status === "new") controls = `<button class="secondary" data-request-update="cancelled" data-request-id="${escapeHtml(id)}">Cancel request</button>`;
+    if (user.role === "customer" && status === "accepted") controls = `<button data-request-update="completed" data-request-id="${escapeHtml(id)}">Mark work completed</button><button class="secondary" data-request-update="cancelled" data-request-id="${escapeHtml(id)}">Cancel</button>`;
+    const alreadyReviewed = backendConfigured
+      ? backendReviews.some((item) => String(item.request_id) === String(id))
+      : read(KEYS.reviews, []).some((item) => String(item.requestId) === String(id));
+    const review = user.role === "customer" && status === "completed" && !alreadyReviewed ? `<button class="secondary" data-review-request="${escapeHtml(id)}">Leave a review</button>` : "";
+    return `<article class="request-card"><div class="request-card-top"><div><b>${escapeHtml(service)}</b><small>${user.role === "worker" ? `From ${escapeHtml(customerName)}` : `For ${escapeHtml(worker?.name || "your worker")}`} · ${escapeHtml(area)}</small></div><span class="request-status status-${escapeHtml(status)}">${escapeHtml(status)}</span></div><p>${escapeHtml(description)}</p>${request.budget_hint || request.budgetHint ? `<small class="request-meta">Budget: ${escapeHtml(request.budget_hint || request.budgetHint)}</small>` : ""}${request.preferred_date || request.preferredDate ? `<small class="request-meta">Preferred: ${escapeHtml(request.preferred_date || request.preferredDate)}</small>` : ""}${request.customer_phone || request.customerPhone ? `<small class="request-meta">Phone: ${escapeHtml(request.customer_phone || request.customerPhone)}</small>` : ""}<div class="request-actions">${controls}${review}</div></article>`;
+  }).join("");
+}
+async function updateRequestStatus(requestId, status) {
+  const user = currentUser();
+  if (!user) return;
+  if (backendConfigured) {
+    const { error } = await supabaseClient.from("service_requests").update({ status }).eq("id", requestId);
+    if (error) { showToast(`Could not update request: ${error.message}`); return; }
+  } else {
+    const requests = read(KEYS.requests, []);
+    const request = requests.find((item) => item.id === requestId);
+    if (request) request.status = status;
+    localStorage.setItem(KEYS.requests, JSON.stringify(requests));
+  }
+  await loadDashboardRequests();
+  showToast(`Request marked ${status}.`);
+  if (status === "completed" && user.role === "customer") openReview(requestId);
+}
+function openReview(requestId) {
+  const form = $("#review-form"); form.elements.requestId.value = requestId;
+  $("#review-error").textContent = ""; showModal($("#review-modal"));
+}
+async function reportWorker(workerId) {
+  if (!currentUser()) { openAuth("login"); showToast("Log in to send a private report."); return; }
+  const form = $("#report-form"); form.elements.workerId.value = workerId;
+  $("#report-error").textContent = ""; showModal($("#report-modal"));
+}
+function toggleFavorite(workerId, button) {
+  const id = String(workerId); const favorites = read(KEYS.favorites, []);
+  const next = favorites.includes(id) ? favorites.filter((item) => item !== id) : [...favorites, id];
+  localStorage.setItem(KEYS.favorites, JSON.stringify(next));
+  button.setAttribute("aria-pressed", String(next.includes(id)));
+  button.textContent = next.includes(id) ? "♥ Saved" : "♡ Save";
+  showToast(next.includes(id) ? "Saved to your favorites on this device." : "Removed from your favorites.");
+}
+function resumePendingQuote() {
+  if (!pendingQuoteWorker) return;
+  const workerId = pendingQuoteWorker;
+  setTimeout(() => openQuoteRequest(workerId), 0);
+}
 function showProfileForm(existing = null) {
   const form = $("#profile-form");
   const user = currentUser();
   if (!user) return;
   $("#profile-form .legal-note").textContent = backendConfigured
-    ? "Your profile is stored in Jirani’s database and shown in the directory only with your consent."
+    ? "Your profile stays out of public search until you choose to list it. You can change this later in Settings."
     : "This preview stores it only in this browser.";
   form.elements.service.value = existing?.service || "";
   form.elements.area.value = existing?.area || "";
   form.elements.phone.value = existing?.phone || "";
   form.elements.years.value = existing?.years || "";
   form.elements.skills.value = existing?.skills || "";
+  form.elements.bio.value = existing?.bio || "";
+  form.elements.priceHint.value = existing?.priceHint || "";
+  form.elements.availability.value = existing?.availability || "available";
   form.elements.consent.checked = false;
+  form.elements.isListed.checked = existing?.isListed ?? true;
   $("#profile-error").textContent = "";
-  profileModal.hidden = false;
-  document.body.classList.add("modal-open");
+  showModal(profileModal);
 }
 async function handleSignup(formData) {
   const name = formData.get("name").trim();
@@ -383,6 +620,7 @@ async function handleSignup(formData) {
     await refreshBackendState();
     closeModal(authModal);
     if (role === "worker") showProfileForm();
+    else if (pendingQuoteWorker) resumePendingQuote();
     else { openDashboard(); showToast("Your account is ready."); }
     return;
   }
@@ -391,7 +629,7 @@ async function handleSignup(formData) {
   saveAccount(user);
   localStorage.setItem(KEYS.session, JSON.stringify(email));
   closeModal(authModal); updateAccountActions();
-  if (role === "worker") showProfileForm(); else { openDashboard(); showToast("Your preview account is ready."); }
+  if (role === "worker") showProfileForm(); else if (pendingQuoteWorker) resumePendingQuote(); else { openDashboard(); showToast("Your preview account is ready."); }
 }
 async function handleLogin(formData) {
   const email = formData.get("email").trim().toLowerCase();
@@ -404,14 +642,14 @@ async function handleLogin(formData) {
     backendSession = data.session;
     await refreshBackendState();
     closeModal(authModal);
-    openDashboard();
+    if (pendingQuoteWorker) resumePendingQuote(); else openDashboard();
     showToast("You’re signed in.");
     return;
   }
   const user = accounts().find((account) => account.email === email);
   if (!user) throw new Error("No preview account for that email in this browser. Create an account first.");
   localStorage.setItem(KEYS.session, JSON.stringify(email));
-  closeModal(authModal); updateAccountActions(); openDashboard(); showToast("You’re logged in to this browser preview.");
+  closeModal(authModal); updateAccountActions(); if (pendingQuoteWorker) resumePendingQuote(); else openDashboard(); showToast("You’re logged in to this browser preview.");
 }
 
 $("#auth-form").addEventListener("submit", async (event) => {
@@ -424,6 +662,58 @@ $("#auth-form").addEventListener("submit", async (event) => {
   // Passwords are deliberately never saved in local preview storage.
   form.elements.password.value = "";
 });
+
+$("#quote-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const data = new FormData(event.currentTarget); const user = currentUser();
+  const worker = findWorker(pendingQuoteWorker); const error = $("#quote-error"); error.textContent = "";
+  if (!user || !worker) { error.textContent = "Sign in and choose a worker to send this request."; return; }
+  const request = { customer_id: user.id, worker_id: worker.id, customer_name: user.name, customer_phone: data.get("phone").trim(), service: worker.service, description: data.get("description").trim(), locality: data.get("locality").trim(), preferred_date: data.get("date") || null, budget_hint: data.get("budget").trim() };
+  if (!request.description || request.description.length < 8 || !request.locality) { error.textContent = "Add a little more detail and your area."; return; }
+  if (backendConfigured) {
+    const { error: saveError } = await supabaseClient.from("service_requests").insert(request);
+    if (saveError) { error.textContent = saveError.message; return; }
+  } else {
+    const localRequests = read(KEYS.requests, []);
+    localRequests.unshift({ ...request, id: `preview-${Date.now()}`, customerId: user.id, workerId: worker.id, customerName: user.name, customerPhone: request.customer_phone, preferredDate: request.preferred_date, budgetHint: request.budget_hint, createdAt: new Date().toISOString(), status: "new" });
+    localStorage.setItem(KEYS.requests, JSON.stringify(localRequests));
+  }
+  closeModal($("#quote-modal")); pendingQuoteWorker = null; showToast("Quote request sent privately to the worker.");
+  if (document.querySelector("#dashboard-view:not([hidden])")) openDashboard();
+});
+
+$("#review-form").addEventListener("submit", async (event) => {
+  event.preventDefault(); const form=event.currentTarget; const data=new FormData(form); const user=currentUser(); const error=$("#review-error"); error.textContent="";
+  const request=backendRequests.find((item)=>String(item.id)===String(data.get("requestId"))) || read(KEYS.requests,[]).find((item)=>String(item.id)===String(data.get("requestId")));
+  if (!user || !request) { error.textContent="This completed request could not be found."; return; }
+  if (backendConfigured) {
+    const { error: saveError } = await supabaseClient.from("worker_reviews").insert({ request_id: request.id, worker_id: request.worker_id, customer_id: user.id, rating: Number(data.get("rating")), comment: data.get("comment").trim() });
+    if (saveError) { error.textContent=saveError.message; return; }
+    await loadBackendWorkers();
+  } else {
+    const reviews=read(KEYS.reviews,[]); reviews.push({requestId:request.id,workerId:request.workerId,rating:Number(data.get("rating")),comment:data.get("comment").trim()}); localStorage.setItem(KEYS.reviews,JSON.stringify(reviews));
+  }
+  closeModal($("#review-modal")); render(); openDashboard(); showToast("Thanks. Your review helps neighbors choose with confidence.");
+});
+
+$("#report-form").addEventListener("submit", async (event) => {
+  event.preventDefault(); const data=new FormData(event.currentTarget); const user=currentUser(); const error=$("#report-error"); error.textContent="";
+  if (!user) { error.textContent="Log in to send a private report."; return; }
+  const report={reporter_id:user.id,worker_id:data.get("workerId"),reason:data.get("reason"),details:data.get("details").trim()};
+  if (backendConfigured) { const {error:saveError}=await supabaseClient.from("worker_reports").insert(report); if(saveError){error.textContent=saveError.message;return;} }
+  else { const reports=read("jirani-preview-reports",[]); reports.unshift({...report,createdAt:new Date().toISOString(),status:"open"}); localStorage.setItem("jirani-preview-reports",JSON.stringify(reports)); }
+  closeModal($("#report-modal")); showToast("Private report sent. The Jirani team will review it.");
+});
+
+$("#setting-contrast").addEventListener("change", (event) => { saveSettings({highContrast:event.target.checked}); applyDisplaySettings(); });
+$("#setting-motion").addEventListener("change", (event) => { saveSettings({reduceMotion:event.target.checked}); applyDisplaySettings(); });
+$("#setting-listed").addEventListener("change", async (event) => {
+  const user=currentUser(); if(!user?.profile) return;
+  const isListed=event.target.checked;
+  if(backendConfigured){const {error}=await supabaseClient.from("worker_profiles").update({is_listed:isListed}).eq("user_id",user.id); if(error){event.target.checked=!isListed;showToast(`Could not update listing: ${error.message}`);return;} backendProfile.is_listed=isListed;await loadBackendWorkers();}
+  else {saveAccount({...user,profile:{...user.profile,isListed}});}
+  updateAccountActions();render();showToast(isListed?"Your profile is public in the directory.":"Your profile is hidden from the public directory.");
+});
 $("#profile-form").addEventListener("submit", async (event) => {
   event.preventDefault();
   const form = event.currentTarget;
@@ -432,7 +722,7 @@ $("#profile-form").addEventListener("submit", async (event) => {
   if (!/^\+?[0-9 ()-]{8,20}$/.test(data.get("phone").trim())) { error.textContent = "Enter a valid phone number, including the country code."; return; }
   if (!data.get("consent")) { error.textContent = "Please agree to show your profile details in the directory."; return; }
   const user = currentUser();
-  const profile = { service: data.get("service").trim(), area: data.get("area").trim(), phone: data.get("phone").trim(), years: Number(data.get("years")), skills: data.get("skills").trim() };
+  const profile = { service: data.get("service").trim(), area: data.get("area").trim(), phone: data.get("phone").trim(), years: Number(data.get("years")), skills: data.get("skills").trim(), bio: data.get("bio").trim(), priceHint: data.get("priceHint").trim(), availability: data.get("availability"), isListed: Boolean(data.get("isListed")) };
   if (!profile.service || !profile.area || !profile.phone || !Number.isFinite(profile.years)) { error.textContent = "Please complete each required field."; return; }
   if (backendConfigured) {
     if (!supabaseClient || !user?.id) { error.textContent = "Sign in again before saving your profile."; return; }
@@ -447,17 +737,20 @@ $("#profile-form").addEventListener("submit", async (event) => {
         contact_phone: profile.phone,
         years_experience: profile.years,
         skills,
+        bio: profile.bio,
+        price_hint: profile.priceHint,
+        availability: profile.availability,
         contact_consent: true,
-        is_listed: true
+        is_listed: profile.isListed
       }, { onConflict: "user_id" })
-      .select("user_id,display_name,service,locality,contact_phone,years_experience,skills,contact_consent,is_listed,verification_status")
+      .select("user_id,display_name,service,locality,contact_phone,years_experience,skills,contact_consent,is_listed,verification_status,bio,price_hint,availability")
       .single();
     if (saveError) { error.textContent = saveError.message; return; }
     backendProfile = savedProfile;
     try { await loadBackendWorkers(); }
     catch (loadError) { error.textContent = `Profile saved, but the directory refresh failed: ${loadError.message}`; return; }
     closeModal(profileModal); render(); updateAccountActions(); openDashboard();
-    showToast("Your worker profile is listed in the directory.");
+    showToast(profile.isListed ? "Your profile is live in the directory." : "Your profile is saved privately. You can list it later in Settings.");
     return;
   }
   saveAccount({ ...user, profile });
@@ -465,6 +758,37 @@ $("#profile-form").addEventListener("submit", async (event) => {
 });
 
 document.addEventListener("click", async (event) => {
+  if (event.target.closest("[data-share-app]")) { await shareJirani(); return; }
+  if (event.target.closest("[data-open-settings]")) { openSettings(); return; }
+  if (event.target.closest("[data-close-settings]")) { closeSettings(); return; }
+  if (event.target.closest("[data-settings-signout]")) { closeSettings(); await signOut(); return; }
+  const fontButton = event.target.closest("[data-font-size]");
+  if (fontButton) { setFontScale(fontButton.dataset.fontSize); return; }
+  if (event.target.closest("[data-toggle-details]")) {
+    const button = event.target.closest("[data-toggle-details]");
+    const expanded = button.closest(".worker-card")?.querySelector(".card-expanded");
+    if (expanded) { expanded.hidden = !expanded.hidden; button.setAttribute("aria-expanded", String(!expanded.hidden)); button.textContent = expanded.hidden ? "Profile details" : "Hide details"; }
+    return;
+  }
+  const favoriteButton = event.target.closest("[data-favorite-worker]");
+  if (favoriteButton) { toggleFavorite(favoriteButton.dataset.favoriteWorker, favoriteButton); return; }
+  const quoteButton = event.target.closest("[data-request-quote]");
+  if (quoteButton) { openQuoteRequest(quoteButton.dataset.requestQuote); return; }
+  const reportButton = event.target.closest("[data-report-worker]");
+  if (reportButton) { await reportWorker(reportButton.dataset.reportWorker); return; }
+  const shareButton = event.target.closest("[data-share-worker]");
+  if (shareButton) {
+    const worker = findWorker(shareButton.dataset.shareWorker);
+    if (!worker) { showToast("That worker profile is no longer available."); return; }
+    const url = `https://mukalamathew19-gif.github.io/jirani/?worker=${encodeURIComponent(worker.id)}#directory`;
+    if (navigator.share) { try { await navigator.share({ title: `${worker.name} on Jirani`, text: `${worker.service} in ${worker.area} — view this local worker profile on Jirani.`, url }); } catch (error) { if (error.name !== "AbortError") await copyShareLink(url); } }
+    else await copyShareLink(url);
+    return;
+  }
+  const statusButton = event.target.closest("[data-request-update]");
+  if (statusButton) { await updateRequestStatus(statusButton.dataset.requestId, statusButton.dataset.requestUpdate); return; }
+  const reviewButton = event.target.closest("[data-review-request]");
+  if (reviewButton) { openReview(reviewButton.dataset.reviewRequest); return; }
   const authButton = event.target.closest("[data-open-auth]");
   if (authButton) { openAuth(authButton.dataset.openAuth, authButton.dataset.role || "customer"); return; }
   const tab = event.target.closest("[data-auth-tab]");
@@ -489,62 +813,50 @@ document.addEventListener("click", async (event) => {
 });
 serviceFilter.addEventListener("change", render);
 areaFilter.addEventListener("change", render);
+$("#directory-query").addEventListener("input", render);
+$("#sort-workers").addEventListener("change", render);
+$("#favorites-only").addEventListener("change", render);
 $("#search-form").addEventListener("submit", (event) => { event.preventDefault(); render(); $("#directory").scrollIntoView({ behavior: "smooth" }); });
 $("#reset-filters").addEventListener("click", () => { serviceFilter.value = ""; areaFilter.value = ""; selectedCategory = ""; render(); });
-document.addEventListener("keydown", (event) => { if (event.key === "Escape") { closeModal(authModal); closeModal(profileModal); } });
-
-updateAccountActions();
-render();
-initializeBackend();
-
-
-async function shareJirani() {
-  const url = "https://mukalamathew19-gif.github.io/jirani/";
-  const shareData = { title: "Jirani — good people, closer to home", text: "Find local skills or share your own with your neighborhood on Jirani.", url };
-  if (navigator.share) {
-    try { await navigator.share(shareData); }
-    catch (error) { if (error.name !== "AbortError") showToast("Could not open the share menu. Copy the Jirani link from your browser address bar."); }
-    return;
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") {
+    const topmost = $$(".modal-backdrop").filter((modal) => !modal.hidden).at(-1);
+    if (topmost) closeModal(topmost);
   }
-  try {
-    await navigator.clipboard.writeText(url);
-    showToast("Jirani link copied. Share it in a message or on social media.");
-  } catch { showToast(`Copy and share the Jirani link: ${url}`); }
-}
-
-document.addEventListener("click", async (event) => {
-  if (event.target.closest("[data-share-app]")) await shareJirani();
+  if (event.key === "Tab") {
+    const modal = $$(".modal-backdrop").filter((item) => !item.hidden).at(-1);
+    if (!modal) return;
+    const focusable = $$('button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), a[href]', modal).filter((item) => !item.hidden);
+    if (!focusable.length) return;
+    const first = focusable[0], last = focusable[focusable.length - 1];
+    if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+    else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+  }
 });
 
-document.addEventListener("click", (event) => {
-  const inviteButton = event.target.closest(".directory-footer [data-open-auth]");
-  if (!inviteButton) return;
+updateAccountActions();
+applyDisplaySettings();
+render();
+highlightSharedWorker();
+initializeBackend();
+
+window.addEventListener("beforeinstallprompt", (event) => {
   event.preventDefault();
-  event.stopImmediatePropagation();
-  shareJirani();
-}, true);
-
-
-const directorySection = $("#directory");
-if (directorySection && !directorySection.querySelector(".text-size-control")) {
-  const control = document.createElement("div");
-  control.className = "text-size-control";
-  control.setAttribute("role", "group");
-  control.setAttribute("aria-label", "Text size");
-  control.style.cssText = "display:flex;align-items:center;justify-content:flex-end;gap:7px;margin:12px 0;color:#596357;font-size:14px";
-  const label = document.createElement("span"); label.textContent = "Text size"; control.append(label);
-  [[1,"A","Standard text size"],[1.1,"A+","Large text"],[1.2,"A++","Largest text"]].forEach(([size,text,name]) => {
-    const button = document.createElement("button"); button.type = "button"; button.dataset.fontSize = String(size); button.setAttribute("aria-label", name); button.setAttribute("aria-pressed", "false"); button.textContent = text;
-    button.style.cssText = "min-width:42px;min-height:42px;padding:6px 9px;border:1px solid #dfe4da;border-radius:5px;background:#fff;color:#28573d;font:600 16px sans-serif";
-    button.addEventListener("click", () => { const chosen=Number(size); document.documentElement.style.zoom=String(chosen); localStorage.setItem("jirani-font-scale",String(chosen)); control.querySelectorAll("button").forEach(b=>b.setAttribute("aria-pressed",String(Number(b.dataset.fontSize)===chosen))); });
-    control.append(button);
-  });
-  $("#directory .section-heading")?.after(control);
-  const chosen=Number(localStorage.getItem("jirani-font-scale")||1.1); document.documentElement.style.zoom=String(chosen);
-  control.querySelectorAll("button").forEach(b=>b.setAttribute("aria-pressed",String(Number(b.dataset.fontSize)===chosen)));
-}
-document.addEventListener("click", (event) => {
-  const invite = event.target.closest(".directory-footer button");
-  if (!invite) return;
-  event.preventDefault(); event.stopImmediatePropagation(); shareJirani();
-}, true);
+  installPrompt = event;
+  const installButton = $("[data-install-app]");
+  if (installButton) installButton.hidden = false;
+});
+window.addEventListener("appinstalled", () => {
+  installPrompt = null;
+  const installButton = $("[data-install-app]");
+  if (installButton) installButton.hidden = true;
+  showToast("Jirani has been added to your device.");
+});
+document.addEventListener("click", async (event) => {
+  if (!event.target.closest("[data-install-app]")) return;
+  if (!installPrompt) { showToast("Use your browser menu and choose ‘Install app’ or ‘Add to Home screen’."); return; }
+  installPrompt.prompt();
+  const choice = await installPrompt.userChoice;
+  if (choice.outcome === "accepted") showToast("Jirani is being added to your device.");
+  installPrompt = null;
+});

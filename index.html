@@ -1,10 +1,16 @@
-src="app.js?v=20261027-accessibility"<!doctype html>
+<!doctype html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#f7f7f2" />
     <meta name="description" content="Find skilled people in your neighborhood." />
+    <meta property="og:title" content="Jirani — good people, closer to home" />
+    <meta property="og:description" content="Find local skills or share your own with your neighborhood." />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://mukalamathew19-gif.github.io/jirani/" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Jirani" />
     <title>Jirani — Good people, closer to home</title>
     <link rel="manifest" href="manifest.webmanifest" />
     <link rel="icon" href="icon.svg" type="image/svg+xml" />
@@ -15,12 +21,14 @@ src="app.js?v=20261027-accessibility"<!doctype html>
     <link rel="stylesheet" href="app-ui.css" />
   </head>
   <body>
+    <a class="skip-link" href="#directory">Skip to local worker directory</a>
     <header class="topbar">
       <a class="brand" href="#home" aria-label="Jirani home"><span class="brand-mark">j</span> jirani<span class="brand-dot">.</span></a>
       <nav class="topnav" aria-label="Main navigation">
         <button class="nav-link active" data-view="home">Find a worker</button>
         <button class="nav-link" data-view="how">How it works</button>
       </nav>
+      <button class="settings-trigger" type="button" data-open-settings aria-label="Open settings">⚙ <span>Settings</span></button>
       <div class="account-actions" id="account-actions">
         <button class="login-link" data-open-auth="login">Log in</button>
         <button class="worker-cta" data-open-auth="signup">Join Jirani <span aria-hidden="true">↗</span></button>
@@ -47,10 +55,11 @@ src="app.js?v=20261027-accessibility"<!doctype html>
 
       <section class="directory-section" id="directory">
         <div class="section-heading"><div><div class="eyebrow section-eyebrow">YOUR LOCAL LINEUP</div><h2>Good hands, <em>close by.</em></h2></div><div class="results-meta"><span id="result-count">0 people</span><span class="meta-dot">·</span><span>in the directory</span></div></div>
+        <div class="directory-tools"><label class="directory-query-label"><span class="sr-only">Search names, skills, and areas</span><input id="directory-query" type="search" placeholder="Search skills, names, or areas…" autocomplete="off" /></label><label class="sort-label"><span class="sr-only">Sort workers</span><select id="sort-workers"><option value="recent">Recently listed</option><option value="experience">Most experience</option><option value="rating">Top rated</option></select></label><label class="favorites-filter"><input id="favorites-only" type="checkbox" /> Saved workers</label></div>
         <div class="category-row" id="category-row" aria-label="Filter by service"></div>
         <div class="listing-grid" id="listing-grid" aria-live="polite"></div>
         <div class="empty-state" id="empty-state" hidden><div class="empty-icon">⌕</div><h3>No one found just yet</h3><p>Try another service or area. We're growing this local network every day.</p><button class="reset-button" id="reset-filters">Clear filters <span>→</span></button></div>
-        <div class="directory-footer"><span>Know someone good at what they do?</span><button class="text-action" data-open-auth="signup" data-role="worker">Invite them to join <span>↗</span></button></div>
+        <div class="directory-footer"><span>Know someone good at what they do?</span><button class="text-action" type="button" data-share-app>Invite them to join <span>↗</span></button></div>
       </section>
 
       <section class="how-section" id="how-view"><div class="how-intro"><div class="eyebrow section-eyebrow">A BETTER WAY TO FIND HELP</div><h2>Local skills.<br /><em>Less searching.</em></h2><p>Jirani brings the people already doing good work in your area into one easy place to find.</p></div><div class="how-steps"><article class="step"><span class="step-number">01</span><div class="step-icon">⌕</div><h3>Find your skill</h3><p>Search by the work you need and the area you’re in.</p></article><article class="step"><span class="step-number">02</span><div class="step-icon">✳</div><h3>Get to know them</h3><p>See what they do, where they work, and how to reach them.</p></article><article class="step"><span class="step-number">03</span><div class="step-icon">↗</div><h3>Make it happen</h3><p>Talk directly. Agree on the details. Get the job done.</p></article></div></section>
@@ -75,41 +84,27 @@ src="app.js?v=20261027-accessibility"<!doctype html>
           <label class="form-field"><span>Password</span><input name="password" type="password" autocomplete="current-password" minlength="8" placeholder="At least 8 characters" required /></label>
           <div class="form-error" id="form-error" role="alert"></div>
           <button class="submit-button" type="submit" id="auth-submit">Log in <span>→</span></button>
-          <p class="legal-note">By continuing, you agree to use Jirani respectfully. Your contact details are only shared when you choose to contact a worker.</p>
+          <p class="legal-note">By continuing, you agree to use Jirani respectfully. Your account email stays private. A worker’s phone number appears only when that worker chooses to list their profile.</p>
         </form>
         <div class="auth-switch" id="auth-switch">New to Jirani? <button type="button" data-auth-tab="signup">Create an account</button></div>
         <div class="demo-note" id="auth-notice"><span>ⓘ</span> Preview mode: accounts stay in this browser only. Real secure sign-in will be connected before launch.</div>
       </section>
     </div>
 
-    <div class="modal-backdrop" id="profile-modal" hidden><section class="auth-modal profile-modal" role="dialog" aria-modal="true" aria-labelledby="profile-title"><button class="modal-close" type="button" aria-label="Close">×</button><div class="eyebrow section-eyebrow">LET YOUR NEIGHBORHOOD FIND YOU</div><h2 id="profile-title">Build your <em>profile.</em></h2><p class="auth-subtitle">Add the details people need to know if you’re the right person for the job.</p><form id="profile-form" novalidate><label class="form-field"><span>What service do you offer?</span><input name="service" placeholder="e.g. Plumbing" required maxlength="50" /></label><label class="form-field"><span>Area you work in</span><input name="area" placeholder="e.g. South B" required maxlength="60" /></label><label class="form-field"><span>Phone number</span><input name="phone" type="tel" autocomplete="tel" placeholder="e.g. +254 7XX XXX XXX" required /></label><label class="form-field"><span>Years of experience</span><input name="years" type="number" min="0" max="70" placeholder="e.g. 5" required /></label><label class="form-field"><span>What jobs do you take on?</span><input name="skills" placeholder="e.g. leaks, water heaters" maxlength="100" /></label><label class="consent-row"><input type="checkbox" name="consent" required /><span>I agree to show my name, service, work area, and phone number to people using the directory.</span></label><div class="form-error" id="profile-error" role="alert"></div><button class="submit-button" type="submit">Save my profile <span>→</span></button><p class="legal-note">You can edit or remove your profile later. This preview stores it only in this browser.</p></form></section></div>
+    <div class="modal-backdrop" id="profile-modal" hidden><section class="auth-modal profile-modal" role="dialog" aria-modal="true" aria-labelledby="profile-title"><button class="modal-close" type="button" aria-label="Close">×</button><div class="eyebrow section-eyebrow">LET YOUR NEIGHBORHOOD FIND YOU</div><h2 id="profile-title">Build your <em>profile.</em></h2><p class="auth-subtitle">Add the details people need to know if you’re the right person for the job.</p><form id="profile-form" novalidate><label class="form-field"><span>What service do you offer?</span><input name="service" placeholder="e.g. Plumbing" required maxlength="50" /></label><label class="form-field"><span>Area you work in</span><input name="area" placeholder="e.g. South B" required maxlength="60" /></label><label class="form-field"><span>Phone number</span><input name="phone" type="tel" autocomplete="tel" placeholder="e.g. +254 7XX XXX XXX" required /></label><label class="form-field"><span>Years of experience</span><input name="years" type="number" min="0" max="70" placeholder="e.g. 5" required /></label><label class="form-field"><span>About your work</span><textarea name="bio" placeholder="What makes your service a good fit?" maxlength="500" rows="3"></textarea></label><label class="form-field"><span>Typical price range (optional)</span><input name="priceHint" placeholder="e.g. From KSh 1,000; final quote after assessment" maxlength="100" /></label><label class="form-field"><span>Availability</span><select name="availability"><option value="available">Available for work</option><option value="busy">Limited availability</option><option value="paused">Taking a break</option></select></label><label class="form-field"><span>What jobs do you take on?</span><input name="skills" placeholder="e.g. leaks, water heaters" maxlength="100" /></label><label class="consent-row"><input type="checkbox" name="consent" required /><span>I agree to store my profile and display my contact details only when I choose to list it.</span></label><label class="consent-row"><input type="checkbox" name="isListed" /><span>Show my profile and phone number in the public directory.</span></label><div class="form-error" id="profile-error" role="alert"></div><button class="submit-button" type="submit">Save my profile <span>→</span></button><p class="legal-note">You can unlist or edit your profile in Settings at any time.</p></form></section></div>
+
+    <div class="modal-backdrop" id="settings-modal" hidden><section class="auth-modal settings-modal" role="dialog" aria-modal="true" aria-labelledby="settings-title"><button class="modal-close" type="button" aria-label="Close settings">×</button><div class="eyebrow section-eyebrow">MAKE JIRANI YOURS</div><h2 id="settings-title">Settings & <em>preferences.</em></h2><p class="auth-subtitle">Your choices are saved on this device.</p><div class="settings-group"><h3>Display</h3><div class="settings-row"><div><b>Text size</b><small>Choose a comfortable reading size</small></div><div class="font-choice" role="group" aria-label="Text size"><button type="button" data-font-size="1" aria-label="Standard text">A</button><button type="button" data-font-size="1.1" aria-label="Large text">A<sup>+</sup></button><button type="button" data-font-size="1.2" aria-label="Largest text">A<sup>++</sup></button></div></div><label class="settings-row settings-check"><span><b>High contrast</b><small>Strengthen text and control contrast</small></span><input type="checkbox" id="setting-contrast" /></label><label class="settings-row settings-check"><span><b>Reduce motion</b><small>Limit decorative movement and transitions</small></span><input type="checkbox" id="setting-motion" /></label></div><div class="settings-group" id="privacy-settings"><h3>Privacy & profile</h3><p class="settings-copy" id="privacy-settings-copy">Sign in as a worker to manage whether your profile appears in the public directory.</p><label class="settings-row settings-check" id="listing-setting-row" hidden><span><b>Public worker listing</b><small>Your name, service, area, and phone are visible when enabled</small></span><input type="checkbox" id="setting-listed" /></label></div><div class="settings-group"><h3>Account & app</h3><p class="settings-copy" id="settings-account-copy">You are browsing Jirani.</p><button class="outline-button full-button" type="button" data-install-app>Install Jirani on this device</button><button class="outline-button full-button" type="button" data-settings-signout hidden>Log out</button></div><button class="submit-button" type="button" data-close-settings>Done</button></section></div>
+
+    <div class="modal-backdrop" id="quote-modal" hidden><section class="auth-modal" role="dialog" aria-modal="true" aria-labelledby="quote-title"><button class="modal-close" type="button" aria-label="Close quote request">×</button><div class="eyebrow section-eyebrow">TELL THEM WHAT YOU NEED</div><h2 id="quote-title">Request a <em>quote.</em></h2><p class="auth-subtitle" id="quote-worker-name"></p><form id="quote-form" novalidate><label class="form-field"><span>Describe the job</span><textarea name="description" placeholder="What needs doing? Include useful details." maxlength="1200" minlength="8" rows="4" required></textarea></label><label class="form-field"><span>Your area</span><input name="locality" placeholder="e.g. South B" maxlength="100" required /></label><label class="form-field"><span>Best phone number (optional)</span><input name="phone" type="tel" placeholder="e.g. +254 7XX XXX XXX" maxlength="24" /></label><label class="form-field"><span>Preferred date (optional)</span><input name="date" type="date" /></label><label class="form-field"><span>Budget range (optional)</span><input name="budget" placeholder="e.g. KSh 2,000–5,000" maxlength="100" /></label><div class="form-error" id="quote-error" role="alert"></div><button class="submit-button" type="submit">Send quote request <span>→</span></button><p class="legal-note">Your request is shared only with this worker. Agree on scope and price before work begins.</p></form></section></div>
+
+    <div class="modal-backdrop" id="review-modal" hidden><section class="auth-modal" role="dialog" aria-modal="true" aria-labelledby="review-title"><button class="modal-close" type="button" aria-label="Close review">×</button><h2 id="review-title">How did it <em>go?</em></h2><form id="review-form"><input type="hidden" name="requestId" /><label class="form-field"><span>Rating</span><select name="rating" required><option value="5">★★★★★ — Excellent</option><option value="4">★★★★☆ — Good</option><option value="3">★★★☆☆ — Okay</option><option value="2">★★☆☆☆ — Poor</option><option value="1">★☆☆☆☆ — Very poor</option></select></label><label class="form-field"><span>Review (optional)</span><textarea name="comment" maxlength="600" rows="3" placeholder="Share a helpful, fair note about the work."></textarea></label><div class="form-error" id="review-error" role="alert"></div><button class="submit-button" type="submit">Post review <span>→</span></button></form></section></div>
+
+    <div class="modal-backdrop" id="report-modal" hidden><section class="auth-modal" role="dialog" aria-modal="true" aria-labelledby="report-title"><button class="modal-close" type="button" aria-label="Close report">×</button><h2 id="report-title">Let us <em>know.</em></h2><form id="report-form"><input type="hidden" name="workerId" /><label class="form-field"><span>What is the concern?</span><select name="reason"><option value="incorrect_details">Incorrect profile details</option><option value="unsafe">Safety concern</option><option value="spam">Spam or misuse</option><option value="other">Something else</option></select></label><label class="form-field"><span>Details (optional)</span><textarea name="details" maxlength="1000" rows="3" placeholder="Share details that will help our review."></textarea></label><div class="form-error" id="report-error" role="alert"></div><button class="submit-button" type="submit">Send private report <span>→</span></button><p class="legal-note">Reports are private and reviewed by the Jirani team.</p></form></section></div>
 
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
     <script src="supabase-config.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="app.js"></script>
+    <script src="app.js?v=20261027-marketplace"></script>
     <script>if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('./service-worker.js').catch(() => {});</script>
   </body>
 </html>
-
-<script>
-(() => {
-  const invite = document.querySelector(".directory-footer button");
-  if (invite) { invite.removeAttribute("data-open-auth"); invite.removeAttribute("data-role"); invite.dataset.shareApp = ""; invite.type = "button"; }
-  const share = async () => {
-    const url = "https://mukalamathew19-gif.github.io/jirani/";
-    try { if (navigator.share) await navigator.share({title:"Jirani — good people, closer to home",text:"Find local skills or share your own with your neighborhood on Jirani.",url});
-      else { await navigator.clipboard.writeText(url); const toast=document.querySelector("#toast"); if(toast){toast.textContent="Jirani link copied. Share it in a message or on social media.";toast.classList.add("show");setTimeout(()=>toast.classList.remove("show"),3400);} }
-    } catch(error) { if(error.name!=="AbortError"){const toast=document.querySelector("#toast");if(toast){toast.textContent="Copy and share the Jirani link: "+url;toast.classList.add("show");}} }
-  };
-  document.addEventListener("click",event=>{if(event.target.closest(".directory-footer button")){event.preventDefault();event.stopImmediatePropagation();share();}},true);
-  const directory=document.querySelector("#directory");
-  if(directory && !directory.querySelector(".text-size-control")){
-    const control=document.createElement("div");control.className="text-size-control";control.setAttribute("role","group");control.setAttribute("aria-label","Text size");control.style.cssText="display:flex;align-items:center;justify-content:flex-end;gap:8px;margin:12px 0;color:#596357;font-size:14px";
-    const label=document.createElement("span");label.textContent="Text size";control.append(label);
-    [[1,"A","Standard text size"],[1.1,"A+","Large text"],[1.2,"A++","Largest text"]].forEach(([size,text,name])=>{const button=document.createElement("button");button.type="button";button.dataset.fontSize=size;button.setAttribute("aria-label",name);button.setAttribute("aria-pressed","false");button.textContent=text;button.style.cssText="min-width:42px;min-height:42px;border:1px solid #dfe4da;border-radius:5px;background:#fff;color:#28573d;font:600 16px sans-serif";button.addEventListener("click",()=>{document.documentElement.style.zoom=String(size);localStorage.setItem("jirani-font-scale",String(size));control.querySelectorAll("button").forEach(b=>b.setAttribute("aria-pressed",String(Number(b.dataset.fontSize)===Number(size))));});control.append(button);});
-    document.querySelector("#directory .section-heading")?.after(control);
-    const size=Number(localStorage.getItem("jirani-font-scale")||1.1);document.documentElement.style.zoom=String(size);control.querySelectorAll("button").forEach(b=>b.setAttribute("aria-pressed",String(Number(b.dataset.fontSize)===size)));
-  }
-})();
-</script>

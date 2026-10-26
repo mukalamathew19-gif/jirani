@@ -14,14 +14,16 @@ Then open `http://localhost:4173`. If `py` is unavailable, install Python or use
 
 ## Included in this preview
 
-- Service and area search, worker profile cards, and direct contact links for user-created profiles.
+- Search by service, area, name, or skill; sort by experience or rating; save favorites on this device; share Jirani or a direct worker profile link.
 - Customer and worker sign-up flows, login, role-specific account dashboard, and editable worker profiles.
-- A verification request/status flow and clear trust guidance.
+- Private quote requests, customer and worker request dashboards, job status updates, completed-job reviews, and private profile reports.
+- Worker availability, service details, price guidance, listing privacy controls, and a manual verification request/status flow with clear trust guidance.
+- Settings for text size, high contrast, reduced motion, public listing, and installing the app on a device.
 - Responsive layout, app manifest, icon, and service worker for install/offline support.
 
 ## Backend status
 
-The Supabase project, database schema, email confirmation, production redirect, and frontend connection are set up. The connected app is live on GitHub Pages. The directory is empty until workers create consented profiles. See [Supabase setup](supabase/README.md).
+The Supabase project, initial database schema, email confirmation, production redirect, and frontend connection are set up. The connected app is live on GitHub Pages. Apply the marketplace migration in `supabase/README.md` before using the new quote, review, or report flows with Supabase. The directory is empty until workers create consented profiles.
 
 The frontend key must be a publishable key only. Never place a Supabase secret or service-role key in this public repository.
 
