@@ -23,7 +23,7 @@ Then open `http://localhost:4173`. If `py` is unavailable, install Python or use
 
 ## Backend status
 
-The Supabase project, initial database schema, email confirmation, production redirect, and frontend connection are set up. The connected app is live on GitHub Pages. Apply the marketplace migration in `supabase/README.md` before using the new quote, review, or report flows with Supabase. The directory is empty until workers create consented profiles.
+The Supabase project, database schema, email confirmation, production redirect, and frontend connection are set up. Both database migrations are applied, and the connected app is live on GitHub Pages. The directory is empty until workers create consented profiles.
 
 The frontend key must be a publishable key only. Never place a Supabase secret or service-role key in this public repository.
 

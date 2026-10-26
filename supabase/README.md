@@ -8,7 +8,7 @@ Create a Supabase project on the free plan. Choose a project name such as `jiran
 
 ## 2. Create tables and security policies
 
-In the Supabase Dashboard, open **SQL Editor**, create a query, paste the contents of `migrations/202610270001_initial_schema.sql`, and run it. This creates the worker directory and verification request tables with RLS policies. Public visitors can read only consented, listed worker profiles. Workers can edit only their own profiles; the browser cannot mark a profile verified.
+In the Supabase Dashboard, open **SQL Editor**, create a query, paste the contents of `202610270001_initial_schema.sql`, and run it. This creates the worker directory and verification request tables with RLS policies. Public visitors can read only consented, listed worker profiles. Workers can edit only their own profiles; the browser cannot mark a profile verified.
 
 For quote requests, request tracking, reviews, and private profile reports, run `migrations/202610270002_marketplace_features.sql` once after the initial schema. It adds worker profile details and availability, participant-only quote requests, reviews that can only be submitted for completed requests, and private profile reports.
 
@@ -32,4 +32,4 @@ Worker requests are stored in `public.verification_requests`. Review references 
 
 ## Current setup status
 
-The Jirani Supabase project has been created on the Free plan, the initial migration has been applied, and `supabase-config.js` contains its public project URL and publishable key. Apply the marketplace migration above if it has not already been run. The included sample workers are fictional and should be removed before collecting real listings. Reports and identity checks currently require manual review in Supabase Studio; no reviewer tools are exposed in the public app.
+The Jirani Supabase project has been created on the Free plan, both database migrations have been applied, and `supabase-config.js` contains its public project URL and publishable key. The included sample workers are fictional and should be removed before collecting real listings. Reports and identity checks currently require manual review in Supabase Studio; no reviewer tools are exposed in the public app.
