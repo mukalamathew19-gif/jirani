@@ -34,4 +34,4 @@ Worker requests are stored in `public.verification_requests`. Review references 
 
 ## Current setup status
 
-The Jirani Supabase project has been created on the Free plan, the initial schema and marketplace migration have been applied, and `supabase-config.js` contains its public project URL and publishable key. The worker-photo migration must also be applied before photo upload is enabled in the live app. The included sample workers are fictional and should be removed before collecting real listings. Reports and identity checks currently require manual review in Supabase Studio; no reviewer tools are exposed in the public app.
+The Jirani Supabase project has been created on the Free plan, all three database migrations have been applied, and `supabase-config.js` contains its public project URL and publishable key. The included sample workers are fictional and should be removed before collecting real listings. Reports and identity checks currently require manual review in Supabase Studio; no reviewer tools are exposed in the public app.

@@ -14,8 +14,8 @@ Then open `http://localhost:4173`. If `py` is unavailable, install Python or use
 
 ## Included in this preview
 
-- Search by service, area, name, or skill; sort by experience or rating; save favorites on this device; share Jirani or a direct worker profile link.
-- Customer and worker sign-up flows, login, role-specific account dashboard, and editable worker profiles.
+- Search by service, area, name, or skill; start from popular service shortcuts; sort by experience or rating; save favorites on this device; share Jirani or a direct worker profile link.
+- Customer and worker sign-up flows, login, role-specific account dashboard, and editable worker profiles with a custom public name, optional cropped profile photo, availability, skills, bio, and price guidance.
 - Private quote requests, customer and worker request dashboards, job status updates, completed-job reviews, and private profile reports.
 - Worker availability, service details, price guidance, listing privacy controls, and a manual verification request/status flow with clear trust guidance.
 - Settings for text size, high contrast, reduced motion, public listing, and installing the app on a device.
@@ -23,7 +23,7 @@ Then open `http://localhost:4173`. If `py` is unavailable, install Python or use
 
 ## Backend status
 
-The Supabase project, database schema, email confirmation, production redirect, and frontend connection are set up. Both database migrations are applied, and the connected app is live on GitHub Pages. The directory is empty until workers create consented profiles.
+The Supabase project, database schema, email confirmation, production redirect, and frontend connection are set up. All three database migrations are applied, and the connected app is live on GitHub Pages. The directory is empty until workers create consented profiles.
 
 The frontend key must be a publishable key only. Never place a Supabase secret or service-role key in this public repository.
 
