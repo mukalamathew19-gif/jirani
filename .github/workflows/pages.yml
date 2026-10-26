@@ -28,14 +28,7 @@ jobs:
       - name: Upload static app
         uses: actions/upload-pages-artifact@v3
         with:
-          path: |
-            index.html
-            styles.css
-            app-ui.css
-            app.js
-            manifest.webmanifest
-            icon.svg
-            service-worker.js
+          path: ./
       - name: Deploy
         id: deployment
         uses: actions/deploy-pages@v4
