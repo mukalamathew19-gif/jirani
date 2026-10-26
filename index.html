@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#f7f7f2" />
+    <meta name="description" content="Find skilled people in your neighborhood." />
+    <title>Jirani — Good people, closer to home</title>
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="icon" href="icon.svg" type="image/svg+xml" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" href="app-ui.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="brand" href="#home" aria-label="Jirani home"><span class="brand-mark">j</span> jirani<span class="brand-dot">.</span></a>
+      <nav class="topnav" aria-label="Main navigation">
+        <button class="nav-link active" data-view="home">Find a worker</button>
+        <button class="nav-link" data-view="how">How it works</button>
+      </nav>
+      <div class="account-actions" id="account-actions">
+        <button class="login-link" data-open-auth="login">Log in</button>
+        <button class="worker-cta" data-open-auth="signup">Join Jirani <span aria-hidden="true">↗</span></button>
+      </div>
+    </header>
+
+    <main id="app">
+      <section class="hero" id="home-view">
+        <div class="hero-copy">
+          <div class="eyebrow"><span class="pulse"></span> GOOD PEOPLE, CLOSER TO HOME</div>
+          <h1>Need a hand?<br /><em>Find your person.</em></h1>
+          <p class="hero-subtitle">Skilled people are already in your neighborhood. Let’s make them easier to find.</p>
+          <form class="search-panel" id="search-form">
+            <label class="search-field service-field"><span class="field-icon" aria-hidden="true">⌕</span><span class="field-content"><span class="field-label">I need help with</span><select id="service-filter" aria-label="Choose a service"><option value="">Any service</option></select></span><span class="select-chevron" aria-hidden="true">⌄</span></label>
+            <span class="search-divider" aria-hidden="true"></span>
+            <label class="search-field area-field"><span class="field-icon pin-icon" aria-hidden="true">⌖</span><span class="field-content"><span class="field-label">Around</span><select id="area-filter" aria-label="Choose an area"><option value="">Everywhere</option></select></span><span class="select-chevron" aria-hidden="true">⌄</span></label>
+            <button class="search-button" type="submit"><span>Find a worker</span><span aria-hidden="true">→</span></button>
+          </form>
+          <div class="hero-proof"><div class="avatar-stack" aria-hidden="true"><span>W</span><span>M</span><span>A</span></div><span>Good work travels by word of mouth.<br /><strong>Now it can travel a little further.</strong></span></div>
+        </div>
+        <div class="hero-art" aria-label="Illustration of a local skilled worker"><div class="art-orbit orbit-one"></div><div class="art-orbit orbit-two"></div><div class="sun-disc"></div><div class="art-note note-top"><span class="note-star">✳</span><span>LOCAL<br /><b>KNOW-HOW</b></span></div><div class="worker-illustration"><div class="toolbox"><span>✦</span></div><div class="worker-body"></div><div class="worker-neck"></div><div class="worker-head"><div class="hair"></div><div class="face-eye eye-one"></div><div class="face-eye eye-two"></div><div class="smile"></div></div><div class="worker-arm arm-left"></div><div class="worker-arm arm-right"></div><div class="overall-strap strap-left"></div><div class="overall-strap strap-right"></div><div class="pocket"></div></div><div class="art-note note-bottom"><span class="note-pin">⌖</span><span>RIGHT AROUND<br /><b>THE CORNER</b></span></div><div class="spark spark-a">✳</div><div class="spark spark-b">✦</div><div class="spark spark-c">·</div></div>
+        <div class="hero-bottom"><span>BUILT AROUND YOUR NEIGHBORHOOD</span><span class="hero-bottom-line"></span><span>SKILL IS EVERYWHERE. FIND IT HERE.</span></div>
+      </section>
+
+      <section class="directory-section" id="directory">
+        <div class="section-heading"><div><div class="eyebrow section-eyebrow">YOUR LOCAL LINEUP</div><h2>Good hands, <em>close by.</em></h2></div><div class="results-meta"><span id="result-count">0 people</span><span class="meta-dot">·</span><span>in the directory</span></div></div>
+        <div class="category-row" id="category-row" aria-label="Filter by service"></div>
+        <div class="listing-grid" id="listing-grid" aria-live="polite"></div>
+        <div class="empty-state" id="empty-state" hidden><div class="empty-icon">⌕</div><h3>No one found just yet</h3><p>Try another service or area. We're growing this local network every day.</p><button class="reset-button" id="reset-filters">Clear filters <span>→</span></button></div>
+        <div class="directory-footer"><span>Know someone good at what they do?</span><button class="text-action" data-open-auth="signup" data-role="worker">Invite them to join <span>↗</span></button></div>
+      </section>
+
+      <section class="how-section" id="how-view"><div class="how-intro"><div class="eyebrow section-eyebrow">A BETTER WAY TO FIND HELP</div><h2>Local skills.<br /><em>Less searching.</em></h2><p>Jirani brings the people already doing good work in your area into one easy place to find.</p></div><div class="how-steps"><article class="step"><span class="step-number">01</span><div class="step-icon">⌕</div><h3>Find your skill</h3><p>Search by the work you need and the area you’re in.</p></article><article class="step"><span class="step-number">02</span><div class="step-icon">✳</div><h3>Get to know them</h3><p>See what they do, where they work, and how to reach them.</p></article><article class="step"><span class="step-number">03</span><div class="step-icon">↗</div><h3>Make it happen</h3><p>Talk directly. Agree on the details. Get the job done.</p></article></div></section>
+      <section class="worker-banner"><div><div class="eyebrow">FOR THE PEOPLE WHO MAKE THINGS WORK</div><h2>Your skills deserve<br />to be <em>found.</em></h2></div><div class="banner-action"><p>Get your work in front of people nearby who need exactly what you do.</p><button class="banner-button" data-open-auth="signup" data-role="worker">Create a worker profile <span>→</span></button><span class="banner-footnote">Free while we’re getting started.</span></div><div class="banner-decoration">✳</div></section>
+    </main>
+
+    <section class="dashboard" id="dashboard-view" hidden></section>
+    <footer class="footer"><a class="brand footer-brand" href="#home"><span class="brand-mark">j</span> jirani<span class="brand-dot">.</span></a><span>Good people, closer to home.</span><span>Made for the neighborhood <span class="footer-heart">♥</span></span></footer>
+
+    <div class="modal-backdrop" id="auth-modal" hidden>
+      <section class="auth-modal" role="dialog" aria-modal="true" aria-labelledby="auth-title">
+        <button class="modal-close" type="button" aria-label="Close">×</button>
+        <div class="auth-brand"><span class="brand-mark">j</span></div>
+        <div class="eyebrow section-eyebrow">GOOD PEOPLE, CLOSER TO HOME</div>
+        <h2 id="auth-title">Welcome to <em>Jirani.</em></h2>
+        <p class="auth-subtitle" id="auth-subtitle">Find someone good nearby, or let your neighborhood find you.</p>
+        <div class="auth-tabs"><button type="button" class="auth-tab active" data-auth-tab="login">Log in</button><button type="button" class="auth-tab" data-auth-tab="signup">Create account</button></div>
+        <form id="auth-form" novalidate>
+          <div class="role-picker" id="role-picker"><label class="role-option"><input type="radio" name="role" value="customer" checked /><span class="role-emoji">⌕</span><span><b>I need a worker</b><small>Find local help</small></span></label><label class="role-option"><input type="radio" name="role" value="worker" /><span class="role-emoji">✳</span><span><b>I offer a skill</b><small>Get discovered locally</small></span></label></div>
+          <label class="form-field" id="name-wrap"><span>Your name</span><input name="name" autocomplete="name" placeholder="e.g. Amina Hassan" /></label>
+          <label class="form-field"><span>Email address</span><input name="email" type="email" autocomplete="email" placeholder="you@example.com" required /></label>
+          <label class="form-field"><span>Password</span><input name="password" type="password" autocomplete="current-password" minlength="8" placeholder="At least 8 characters" required /></label>
+          <div class="form-error" id="form-error" role="alert"></div>
+          <button class="submit-button" type="submit" id="auth-submit">Log in <span>→</span></button>
+          <p class="legal-note">By continuing, you agree to use Jirani respectfully. Your contact details are only shared when you choose to contact a worker.</p>
+        </form>
+        <div class="auth-switch" id="auth-switch">New to Jirani? <button type="button" data-auth-tab="signup">Create an account</button></div>
+        <div class="demo-note"><span>ⓘ</span> Preview mode: accounts stay in this browser only. Real secure sign-in will be connected before launch.</div>
+      </section>
+    </div>
+
+    <div class="modal-backdrop" id="profile-modal" hidden><section class="auth-modal profile-modal" role="dialog" aria-modal="true" aria-labelledby="profile-title"><button class="modal-close" type="button" aria-label="Close">×</button><div class="eyebrow section-eyebrow">LET YOUR NEIGHBORHOOD FIND YOU</div><h2 id="profile-title">Build your <em>profile.</em></h2><p class="auth-subtitle">Add the details people need to know if you’re the right person for the job.</p><form id="profile-form" novalidate><label class="form-field"><span>What service do you offer?</span><input name="service" placeholder="e.g. Plumbing" required maxlength="50" /></label><label class="form-field"><span>Area you work in</span><input name="area" placeholder="e.g. South B" required maxlength="60" /></label><label class="form-field"><span>Phone number</span><input name="phone" type="tel" autocomplete="tel" placeholder="e.g. +254 7XX XXX XXX" required /></label><label class="form-field"><span>Years of experience</span><input name="years" type="number" min="0" max="70" placeholder="e.g. 5" required /></label><label class="form-field"><span>What jobs do you take on?</span><input name="skills" placeholder="e.g. leaks, water heaters" maxlength="100" /></label><label class="consent-row"><input type="checkbox" name="consent" required /><span>I agree to show my name, service, work area, and phone number to people using the directory.</span></label><div class="form-error" id="profile-error" role="alert"></div><button class="submit-button" type="submit">Save my profile <span>→</span></button><p class="legal-note">You can edit or remove your profile later. This preview stores it only in this browser.</p></form></section></div>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    <script src="app.js"></script>
+    <script>if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('./service-worker.js').catch(() => {});</script>
+  </body>
+</html>
