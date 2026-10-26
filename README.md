@@ -19,16 +19,22 @@ Then open `http://localhost:4173`. If `py` is unavailable, install Python or use
 - A verification request/status flow and clear trust guidance.
 - Responsive layout, app manifest, icon, and service worker for install/offline support.
 
-## Preview limitations before a public launch
+## Backend status
+
+The Supabase project, database schema, and frontend project settings are now set up. The website still needs this updated frontend deployed to GitHub Pages, and Supabase Auth still needs the production redirect URL and email confirmation settings configured. See [Supabase setup](supabase/README.md).
+
+The frontend key must be a publishable key only. Never place a Supabase secret or service-role key in this public repository.
+
+## Preview limitations before the backend is connected
 
 - Account records are stored in this browser's local storage. Passwords are not saved, but login is only a UI demonstration; it does not authenticate a password or verify an email.
 - Verification requests only change a local preview status. There is no identity check, SMS/email OTP, reviewer queue, or admin approval.
 - Nine directory entries are fictional sample profiles with no working contact numbers. Replace them with real profiles only after getting each worker's consent and confirming details.
-- This is not safe for real user data or a public launch. Connect a real backend such as Supabase Auth and a database, enforce access rules, and implement a human verification process before collecting real accounts or publishing contacts.
+- Do not enter real user data until the updated frontend is deployed and email confirmation and redirect settings are configured. The verification flow is a manual review request; it does not independently validate identity or guarantee work quality.
 
 ## Suggested next implementation phase
 
 1. Pick the pilot locality and initial service categories.
-2. Create a Supabase project and connect email verification/auth, database tables, and row-level security.
-3. Add worker profile management, admin review, and a documented verification standard.
+2. Deploy the updated frontend and finish Supabase Auth redirect/email settings.
+3. Add admin review tools and a documented verification standard.
 4. Collect consented pilot listings and test the workflow with local residents and workers.
