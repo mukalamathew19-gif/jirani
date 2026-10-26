@@ -21,20 +21,19 @@ Then open `http://localhost:4173`. If `py` is unavailable, install Python or use
 
 ## Backend status
 
-The Supabase project, database schema, and frontend project settings are now set up. The website still needs this updated frontend deployed to GitHub Pages, and Supabase Auth still needs the production redirect URL and email confirmation settings configured. See [Supabase setup](supabase/README.md).
+The Supabase project, database schema, email confirmation, production redirect, and frontend connection are set up. The connected app is live on GitHub Pages. The directory is empty until workers create consented profiles. See [Supabase setup](supabase/README.md).
 
 The frontend key must be a publishable key only. Never place a Supabase secret or service-role key in this public repository.
 
-## Preview limitations before the backend is connected
+## Before a real pilot
 
 - Account records are stored in this browser's local storage. Passwords are not saved, but login is only a UI demonstration; it does not authenticate a password or verify an email.
-- Verification requests only change a local preview status. There is no identity check, SMS/email OTP, reviewer queue, or admin approval.
-- Nine directory entries are fictional sample profiles with no working contact numbers. Replace them with real profiles only after getting each worker's consent and confirming details.
-- Do not enter real user data until the updated frontend is deployed and email confirmation and redirect settings are configured. The verification flow is a manual review request; it does not independently validate identity or guarantee work quality.
+- Verification requests are stored in Supabase, but reviewers currently process them manually in Supabase Studio. Jirani does not independently check identity, and verification does not guarantee work quality or safety.
+- Nine directory entries are fictional and hidden when the backend is connected. Add real profiles only after getting each worker's consent and confirming details.
+- Supabase's default email sender has low rate limits. Configure SMTP before a wider pilot.
 
 ## Suggested next implementation phase
 
 1. Pick the pilot locality and initial service categories.
-2. Deploy the updated frontend and finish Supabase Auth redirect/email settings.
-3. Add admin review tools and a documented verification standard.
-4. Collect consented pilot listings and test the workflow with local residents and workers.
+2. Add in-app admin review tools and a documented verification standard.
+3. Collect consented pilot listings and test the workflow with local residents and workers.
