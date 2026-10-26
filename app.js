@@ -496,3 +496,22 @@ document.addEventListener("keydown", (event) => { if (event.key === "Escape") { 
 updateAccountActions();
 render();
 initializeBackend();
+
+
+async function shareJirani() {
+  const url = "https://mukalamathew19-gif.github.io/jirani/";
+  const shareData = { title: "Jirani — good people, closer to home", text: "Find local skills or share your own with your neighborhood on Jirani.", url };
+  if (navigator.share) {
+    try { await navigator.share(shareData); }
+    catch (error) { if (error.name !== "AbortError") showToast("Could not open the share menu. Copy the Jirani link from your browser address bar."); }
+    return;
+  }
+  try {
+    await navigator.clipboard.writeText(url);
+    showToast("Jirani link copied. Share it in a message or on social media.");
+  } catch { showToast(`Copy and share the Jirani link: ${url}`); }
+}
+
+document.addEventListener("click", async (event) => {
+  if (event.target.closest("[data-share-app]")) await shareJirani();
+});
