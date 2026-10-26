@@ -1,18 +1,33 @@
-# Jirani Supabase setup
+# Supabase setup for Jirani
 
-Jirani uses Supabase Auth and PostgreSQL. The project and initial schema have been created on the Supabase Free plan. The browser receives only the project URL and public publishable key in supabase-config.js. Never put a secret or service_role key in the app or public GitHub repository.
+Jirani uses Supabase Auth for email/password accounts and PostgreSQL for worker listings and verification requests. The browser uses only a project URL and a publishable key; Row Level Security (RLS) protects the database. Never put a secret/service-role key in the website.
 
-## What is configured
+## 1. Create the project
 
-- Email and password sign-in with email confirmation required.
-- The production redirect is limited to https://mukalamathew19-gif.github.io/jirani/.
-- worker_profiles and verification_requests use Row Level Security. Public visitors can read a worker profile only when the worker consents and lists it. Workers can update only their own profile; the browser cannot mark it verified.
-- The SQL migration is in migrations/202610270001_initial_schema.sql.
+Create a Supabase project on the free plan. Choose a project name such as `jirani` and a database password you can store safely. The region can be chosen in the Dashboard; choose the closest available region to the pilot community.
 
-## Verification review
+## 2. Create tables and security policies
 
-Review worker evidence outside the app, then update that worker’s request status in Supabase Studio. The database trigger updates the worker’s badge. Verification means a reviewer checked the submitted evidence; it does not guarantee work quality or safety.
+In the Supabase Dashboard, open **SQL Editor**, create a query, paste the contents of `migrations/202610270001_initial_schema.sql`, and run it. This creates the worker directory and verification request tables with RLS policies. Public visitors can read only consented, listed worker profiles. Workers can edit only their own profiles; the browser cannot mark a profile verified.
 
-## Pilot notes
+## 3. Configure email sign-in
 
-The default Supabase email sender has low rate limits; configure SMTP before a wider pilot. The nine sample directory profiles are fictional. Replace them only with real profiles whose owners gave consent and whose details have been confirmed.
+In **Authentication → URL Configuration**, add the deployed site URL as the Site URL and add this redirect URL to the allowed list:
+
+```text
+https://mukalamathew19-gif.github.io/jirani/**
+```
+
+Email/password sign-up is used. Keep email confirmation enabled so users must verify their email before signing in. The default Supabase email sender has low rate limits; for a real pilot, configure an SMTP provider later.
+
+## 4. Connect the static site
+
+In the Supabase Dashboard, open **Connect** and copy the Project URL and **publishable key** (`sb_publishable_...`). Put those two values in `supabase-config.js` and publish that file with the rest of the site. These two frontend values are designed to be public. Do not copy any key labelled **secret** or **service_role** into the app, browser, or GitHub.
+
+## 5. Review verification requests
+
+Worker requests are stored in `public.verification_requests`. Review references outside the app, then update a request's `status` to `approved` or `rejected` in Supabase Studio. A database trigger updates the public profile badge. Approval means a reviewer checked the submitted evidence; it is not a guarantee of work quality or safety.
+
+## Current setup status
+
+The Jirani Supabase project has been created on the Free plan, the initial migration has been applied, and `supabase-config.js` contains its public project URL and publishable key. Finish the Auth URL/email settings above, then deploy the updated frontend to GitHub Pages. The included sample workers are fictional and should be removed before collecting real listings.
